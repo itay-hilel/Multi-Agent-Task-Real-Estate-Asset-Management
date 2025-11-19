@@ -95,7 +95,12 @@ def classify_intent(state: AgentState):
     Respond ONLY with the category name (one word).
     """
     response = llm.invoke(prompt)
-    intent = response.content.strip().lower()
+    # Handle both string and list responses
+    content = response.content
+    if isinstance(content, list):
+        # If content is a list, join it or take the first element
+        content = ' '.join(str(item) for item in content) if content else ''
+    intent = str(content).strip().lower()
     
     # Fallback for unclear responses
     valid_intents = ['pnl_analysis', 'property_details', 'document_search', 'general_chat']
@@ -137,7 +142,10 @@ def extract_info(state: AgentState):
     
     import json
     try:
-        extracted = json.loads(response.content)
+        content = response.content
+        if isinstance(content, list):
+            content = ' '.join(str(item) for item in content) if content else '{}'
+        extracted = json.loads(str(content))
     except:
         extracted = {}
     
