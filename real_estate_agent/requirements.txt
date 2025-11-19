@@ -6,3 +6,5 @@ pyarrow
 streamlit
 python-dotenv
 plotly
+google-genai  # Google's unified GenAI SDK for File Search RAG
+reportlab  # For generating PDF data dictionaries
