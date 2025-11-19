@@ -13,7 +13,7 @@ load_dotenv()
 # Initialize LLM for grading
 api_key = os.getenv("GOOGLE_API_KEY")
 grader_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash-exp",
+    model="gemini-2.5-flash",
     temperature=0,
     google_api_key=api_key
 )
