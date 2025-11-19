@@ -16,11 +16,19 @@ st.sidebar.header("Data Preview")
 try:
     # Load data again for preview (or import from agent if shared)
     df = pd.read_parquet(DATA_PATH)
+    # Fill missing property names
+    df['property_name'] = df['property_name'].fillna('General/Corporate')
     st.sidebar.write(f"Total Rows: {len(df)}")
     st.sidebar.dataframe(df.head(100))
     
-    # Simple Chart
-    if 'profit' in df.columns and 'property_name' in df.columns:
+    # Charts
+    if 'profit' in df.columns and 'ledger_type' in df.columns:
+        st.sidebar.subheader("Financial Overview")
+        
+        # Revenue vs Expenses
+        rev_exp = df.groupby('ledger_type')['profit'].sum().abs()
+        st.sidebar.bar_chart(rev_exp)
+        
         st.sidebar.subheader("Profit by Property")
         profit_by_prop = df.groupby('property_name')['profit'].sum().sort_values()
         st.sidebar.bar_chart(profit_by_prop)

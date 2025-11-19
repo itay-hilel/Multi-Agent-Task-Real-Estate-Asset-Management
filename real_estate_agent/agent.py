@@ -44,8 +44,8 @@ def classify_intent(state: AgentState):
     prompt = f"""
     You are a helpful assistant for a real estate asset management system.
     Classify the user's intent into one of the following categories:
-    - 'pnl_analysis': Questions about profit, loss, financial performance, net income.
-    - 'property_details': Questions about specific property details, tenants, lease terms (even if not explicitly in data, map here).
+    - 'pnl_analysis': Questions about profit, loss, revenue, expenses, financial performance, net income.
+    - 'property_details': Questions about specific property details, tenants, lease terms.
     - 'general_chat': Greetings, general questions not related to specific data.
     
     User Query: {last_message}
@@ -67,9 +67,9 @@ def extract_info(state: AgentState):
     messages = state['messages']
     last_message = messages[-1].content
     
-    # Get unique values for context (limit to avoid huge prompt)
-    properties = df['property_name'].dropna().unique().tolist()[:50]
-    tenants = df['tenant_name'].dropna().unique().tolist()[:50]
+    # Get unique values for context
+    properties = df['property_name'].dropna().unique().tolist()
+    tenants = df['tenant_name'].dropna().unique().tolist()
     
     prompt = f"""
     Extract the following information from the user query if present:
@@ -77,10 +77,12 @@ def extract_info(state: AgentState):
     - tenant_name: Look for these known tenants: {tenants}
     - year: e.g., 2023, 2024
     - quarter: e.g., Q1, Q2
+    - ledger_type: 'revenue' or 'expenses' (or null if asking for net profit/both)
+    - category: Any specific expense/revenue category mentioned (e.g., 'tax', 'maintenance', 'rent')
     
     User Query: {last_message}
     
-    Return a JSON object with keys 'property_name', 'tenant_name', 'year', 'quarter'. 
+    Return a JSON object with keys 'property_name', 'tenant_name', 'year', 'quarter', 'ledger_type', 'category'. 
     Values should be null if not found.
     """
     # structured output would be better, but using json mode for simplicity with gemini flash
@@ -101,28 +103,54 @@ def query_data(state: AgentState):
     
     filtered_df = df.copy()
     
+    # Fill missing property names with 'General/Corporate' for better handling
+    filtered_df['property_name'] = filtered_df['property_name'].fillna('General/Corporate')
+    
     # Apply filters
     if info.get('property_name'):
         filtered_df = filtered_df[filtered_df['property_name'] == info['property_name']]
     if info.get('tenant_name'):
         filtered_df = filtered_df[filtered_df['tenant_name'] == info['tenant_name']]
     if info.get('year'):
-        filtered_df = filtered_df[filtered_df['year'] == str(info['year'])] # Ensure string match if year is object
+        filtered_df = filtered_df[filtered_df['year'] == str(info['year'])]
     if info.get('quarter'):
         filtered_df = filtered_df[filtered_df['quarter'] == info['quarter']]
+    if info.get('ledger_type'):
+        # Map common terms if needed, but assuming LLM extracts 'revenue' or 'expenses' matches data or close enough
+        l_type = info['ledger_type'].lower()
+        if 'rev' in l_type:
+            filtered_df = filtered_df[filtered_df['ledger_type'] == 'revenue']
+        elif 'exp' in l_type:
+            filtered_df = filtered_df[filtered_df['ledger_type'] == 'expenses']
+            
+    if info.get('category'):
+        # Fuzzy match or partial match for category
+        cat = info['category'].lower()
+        filtered_df = filtered_df[filtered_df['ledger_category'].str.contains(cat, case=False, na=False)]
         
     result_text = ""
     
     if intent == 'pnl_analysis':
         total_profit = filtered_df['profit'].sum()
-        # Group by property if multiple
-        breakdown = filtered_df.groupby('property_name')['profit'].sum().to_dict()
-        result_text = f"Total Profit: {total_profit}\nBreakdown by Property: {breakdown}"
+        
+        # Create a breakdown
+        # If specific ledger type requested, show breakdown by category
+        if info.get('ledger_type') or info.get('category'):
+            breakdown = filtered_df.groupby('ledger_category')['profit'].sum().sort_values().to_dict()
+            result_text = f"Total: {total_profit}\nBreakdown by Category: {breakdown}"
+        else:
+            # General PnL, show breakdown by Property and Ledger Type
+            prop_breakdown = filtered_df.groupby('property_name')['profit'].sum().to_dict()
+            type_breakdown = filtered_df.groupby('ledger_type')['profit'].sum().to_dict()
+            result_text = f"Net Profit: {total_profit}\nBy Property: {prop_breakdown}\nBy Type: {type_breakdown}"
         
     elif intent == 'property_details':
-        # Show some sample rows or summary
         if len(filtered_df) > 0:
-            summary = filtered_df[['property_name', 'tenant_name', 'ledger_description', 'profit']].head(5).to_string()
+            # Show more details including category and description
+            cols = ['property_name', 'ledger_type', 'ledger_category', 'ledger_description', 'profit']
+            # Filter cols that exist
+            cols = [c for c in cols if c in filtered_df.columns]
+            summary = filtered_df[cols].head(5).to_string()
             result_text = f"Found {len(filtered_df)} records. Here are the top 5:\n{summary}"
         else:
             result_text = "No records found matching the criteria."
@@ -146,9 +174,10 @@ def generate_response(state: AgentState):
     Extracted Info: {extracted}
     Data Analysis Result: {tool_output}
     
-    Provide a clear, concise, and professional answer to the user. 
-    If the data analysis result contains numbers, format them as currency.
-    If no data was found, politely inform the user.
+    Provide a clear, concise, and professional answer to the user.
+    - If the result is a breakdown, present it clearly (e.g., bullet points).
+    - Format numbers as currency (USD).
+    - If 'General/Corporate' appears in property lists, explain these are entity-level expenses not tied to a specific property.
     """
     response = llm.invoke(prompt)
     return {"messages": [response]}
