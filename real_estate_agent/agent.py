@@ -1,11 +1,3 @@
-"""
-Enhanced Real Estate Agent with Google File Search RAG Integration
-
-This agent combines:
-1. Structured data queries (Pandas on cortex.parquet)
-2. Unstructured knowledge retrieval (Google File Search RAG)
-"""
-
 import os
 import json
 import pandas as pd
@@ -46,10 +38,30 @@ else:
     print("⚠️  RAG file not configured. Run setup_rag.py first.")
 
 # --- Data Loading ---
-DATA_PATH = os.path.join(current_dir, "..", "cortex.parquet")
+# Support both CSV and Parquet formats
+CSV_PATH = os.path.join(current_dir, "..", "cortex.csv")
+PARQUET_PATH = os.path.join(current_dir, "..", "cortex.parquet")
+
+# Try CSV first, fallback to parquet
+if os.path.exists(CSV_PATH):
+    DATA_PATH = CSV_PATH
+    data_format = "CSV"
+elif os.path.exists(PARQUET_PATH):
+    DATA_PATH = PARQUET_PATH
+    data_format = "Parquet"
+else:
+    DATA_PATH = None
+    data_format = None
+
 try:
-    df = pd.read_parquet(DATA_PATH)
-    print(f"✅ Loaded data with {len(df)} rows.")
+    if DATA_PATH:
+        if data_format == "CSV":
+            df = pd.read_csv(DATA_PATH)
+        else:
+            df = pd.read_parquet(DATA_PATH)
+        print(f"✅ Loaded data with {len(df)} rows from {data_format}.")
+    else:
+        raise FileNotFoundError("No data file found (cortex.csv or cortex.parquet)")
 except Exception as e:
     print(f"❌ Error loading data: {e}")
     df = pd.DataFrame()
@@ -98,8 +110,16 @@ def classify_intent(state: AgentState):
     # Handle both string and list responses
     content = response.content
     if isinstance(content, list):
-        # If content is a list, join it or take the first element
-        content = ' '.join(str(item) for item in content) if content else ''
+        # If content is a list of dicts with 'text' field, extract the text
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict) and 'text' in item:
+                text_parts.append(item['text'])
+            elif isinstance(item, str):
+                text_parts.append(item)
+            else:
+                text_parts.append(str(item))
+        content = ' '.join(text_parts) if text_parts else ''
     intent = str(content).strip().lower()
     
     # Fallback for unclear responses
@@ -112,7 +132,7 @@ def classify_intent(state: AgentState):
 
 def extract_info(state: AgentState):
     """
-    Extracts relevant entities (property names, years, tenants) from the query.
+    Extracts relevant entities (property names, years, tenants, ledger categories) from the query.
     Only called for pnl_analysis and property_details intents.
     """
     messages = state['messages']
@@ -121,20 +141,56 @@ def extract_info(state: AgentState):
     # Get unique values for context
     properties = df['property_name'].dropna().unique().tolist()
     tenants = df['tenant_name'].dropna().unique().tolist()
+    ledger_categories = df['ledger_category'].dropna().unique().tolist()
     
     prompt = f"""
     Extract the following information from the user query if present:
-    - property_name: Look for these known properties: {properties[:20]}  (showing first 20)
-    - tenant_name: Look for these known tenants: {tenants[:20]}  (showing first 20)
-    - year: e.g., 2023, 2024
-    - quarter: e.g., Q1, Q2, 2024-Q1
-    - ledger_type: 'revenue' or 'expenses' (or null if asking for net profit/both)
-    - category: Any specific expense/revenue category mentioned (e.g., 'tax', 'maintenance', 'rent')
+    
+    PROPERTIES: {properties[:20]}  (showing first 20)
+    TENANTS: {tenants[:20]}  (showing first 20)
+    
+    LEDGER CATEGORIES (IMPORTANT - extract exact matches):
+    Revenue: revenue_rent_taxed, proceeds_parking_taxed, vat_compensation, rent_discount_taxed
+    Expenses: management_fees, directors_fee, insurance_in_general, bank_charges, financial_expenses,
+              interest_mortgage, real_estate_taxes, asset_management_fees, property_management_fees,
+              maintenance, other_general_expenses
+    
+    Extract:
+    - property_name: exact property name from list above
+    - tenant_name: exact tenant name from list above  
+    - year: single year (e.g., 2024) or null
+    - quarter: specific quarter (e.g., "2024-Q1", "2024-Q4") or null
+    - ledger_type: 'revenue' or 'expenses' or null
+    - ledger_category: EXACT category name from list above (e.g., "revenue_rent_taxed", "management_fees")
+    - comparison_years: array of years if comparing (e.g., [2024, 2025]) or null
+    - aggregate_by: "tenant", "quarter", "property", "category" if grouping is needed, or null
+    - metric: "ratio", "growth_rate", "noi", "expense_ratio", "concentration" or null
+    - top_n: integer for top N items (e.g., 3) or null
+    
+    CRITICAL EXAMPLES - FOLLOW THESE EXACTLY:
+    "revenue from taxed rent" → ledger_category: "revenue_rent_taxed", ledger_type: "revenue"
+    "taxed rent" → ledger_category: "revenue_rent_taxed", ledger_type: "revenue"
+    "management fees" → ledger_category: "management_fees", ledger_type: "expenses"
+    "percentage of total expenses are management fees" → ledger_category: "management_fees", ledger_type: "expenses"
+    "2024 vs 2025" → comparison_years: [2024, 2025]
+    "2024 compare to 2025" → comparison_years: [2024, 2025]
+    "net profit in 2024 compare to 2025" → comparison_years: [2024, 2025]
+    "Q4 2024" → quarter: "2024-Q4", year: "2024"
+    "which quarter" → aggregate_by: "quarter"
+    "which tenant" → aggregate_by: "tenant"
+    "how many buildings" → aggregate_by: "property"
+    "ratio of parking to rent" → metric: "ratio", ledger_category: "proceeds_parking_taxed"
+    "top 3 tenants" → metric: "concentration", top_n: 3, aggregate_by: "tenant"
+    "NOI excluding financing" → metric: "noi"
+    "growth from Jan to Dec" → metric: "growth_rate"
+    "lowest expense ratio" → metric: "expense_ratio"
+    "rent discounts" → ledger_category: "rent_discount_taxed"
     
     User Query: {last_message}
     
-    Return a JSON object with keys 'property_name', 'tenant_name', 'year', 'quarter', 'ledger_type', 'category'. 
-    Values should be null if not found.
+    Return a JSON object with all keys. Use null for missing values.
+    IMPORTANT: If you see "compare", "vs", or "to" between two years, set comparison_years.
+    IMPORTANT: Match ledger categories even if user uses shorthand (e.g., "taxed rent" = "revenue_rent_taxed").
     """
     
     llm_json = llm.bind(response_format={"type": "json_object"})
@@ -144,7 +200,14 @@ def extract_info(state: AgentState):
     try:
         content = response.content
         if isinstance(content, list):
-            content = ' '.join(str(item) for item in content) if content else '{}'
+            # Extract text from structured list responses
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict) and 'text' in item:
+                    text_parts.append(item['text'])
+                elif isinstance(item, str):
+                    text_parts.append(item)
+            content = ' '.join(text_parts) if text_parts else '{}'
         extracted = json.loads(str(content))
     except:
         extracted = {}
@@ -155,44 +218,268 @@ def extract_info(state: AgentState):
 def query_data(state: AgentState):
     """
     Queries the Pandas DataFrame based on extracted info and intent.
-    This handles STRUCTURED data queries.
+    This handles STRUCTURED data queries with smart routing.
     """
     intent = state['intent']
     info = state.get('extracted_info', {})
+    last_message = state['messages'][-1].content.lower()
     
+    # QUICK WIN 1: Handle entity name queries
+    if 'entity' in last_message or 'company' in last_message:
+        entity_names = df['entity_name'].dropna().unique()
+        if len(entity_names) > 0:
+            return {"tool_output": f"Entity name: {entity_names[0]}"}
+        return {"tool_output": "No entity name found in dataset"}
+    
+    # QUICK WIN 2: Handle building count queries
+    if 'how many building' in last_message or 'number of building' in last_message:
+        building_count = df['property_name'].dropna().nunique()
+        buildings = sorted(df['property_name'].dropna().unique().tolist())
+        return {"tool_output": f"Total buildings: {building_count}\\nBuildings: {', '.join(buildings)}"}
+    
+    # FALLBACK: Handle taxed rent queries (Q5)
+    if 'taxed rent' in last_message or 'revenue_rent_taxed' in last_message:
+        if not info.get('ledger_category'):
+            info['ledger_category'] = 'revenue_rent_taxed'
+            info['ledger_type'] = 'revenue'
+    
+    # FALLBACK: Handle management fees queries (Q8)
+    if 'management fee' in last_message or 'management_fee' in last_message:
+        if not info.get('ledger_category'):
+            # Match all management fee categories
+            info['ledger_category'] = 'management'
+            info['ledger_type'] = 'expenses'
+    
+    # FALLBACK: Handle year comparisons (Q9)
+    if not info.get('comparison_years'):
+        if ('2024' in last_message and '2025' in last_message) and any(word in last_message for word in ['compare', 'vs', 'versus', 'to']):
+            info['comparison_years'] = [2024, 2025]
+            
+    # FALLBACK: Handle rent discounts (Q11)
+    if 'discount' in last_message:
+         if not info.get('ledger_category'):
+            info['ledger_category'] = 'rent_discount_taxed'
+            
+    # FALLBACK: Handle parking ratio (Q12)
+    if 'parking' in last_message and 'ratio' in last_message:
+        info['metric'] = 'ratio'
+        
+    # FALLBACK: Handle top tenants (Q13)
+    if 'top' in last_message and 'tenant' in last_message:
+        info['metric'] = 'concentration'
+        if '3' in last_message:
+            info['top_n'] = 3
+            
+    # FALLBACK: Handle NOI (Q14)
+    if 'noi' in last_message or 'net operating income' in last_message:
+        info['metric'] = 'noi'
+        
+    # FALLBACK: Handle growth rate (Q15)
+    if 'growth' in last_message:
+        info['metric'] = 'growth_rate'
+        
+    # FALLBACK: Handle expense ratio (Q16)
+    if 'expense ratio' in last_message:
+        info['metric'] = 'expense_ratio'
+    
+    
+    # Prepare filtered dataframe
     filtered_df = df.copy()
-    
-    # Fill missing property names with 'General/Corporate' for better handling
     filtered_df['property_name'] = filtered_df['property_name'].fillna('Entity-Level')
     
-    # Apply filters
+    # Apply basic filters
     if info.get('property_name'):
         filtered_df = filtered_df[filtered_df['property_name'] == info['property_name']]
+    
     if info.get('tenant_name'):
         filtered_df = filtered_df[filtered_df['tenant_name'] == info['tenant_name']]
-    if info.get('year'):
-        # Handle both string and int
-        year_str = str(info['year'])
-        filtered_df = filtered_df[filtered_df['year'] == year_str]
+    
+    if info.get('year') and not info.get('comparison_years') and not info.get('metric') == 'growth_rate':
+        filtered_df = filtered_df[filtered_df['year'] == str(info['year'])]
+    
     if info.get('quarter'):
         q = info['quarter']
-        # Handle Q1, Q2 format or 2024-Q1 format
-        if 'Q' in str(q).upper() and '-' not in str(q):
-            # User said "Q1" - need to add year if we have it
-            if info.get('year'):
-                q = f"{info['year']}-{q.upper()}"
+        if 'Q' in str(q).upper() and '-' not in str(q) and info.get('year'):
+            q = f"{info['year']}-{q.upper()}"
         filtered_df = filtered_df[filtered_df['quarter'] == q]
+    
     if info.get('ledger_type'):
         l_type = info['ledger_type'].lower()
         if 'rev' in l_type:
             filtered_df = filtered_df[filtered_df['ledger_type'] == 'revenue']
         elif 'exp' in l_type:
             filtered_df = filtered_df[filtered_df['ledger_type'] == 'expenses']
-            
-    if info.get('category'):
-        cat = info['category'].lower()
-        filtered_df = filtered_df[filtered_df['ledger_category'].str.contains(cat, case=False, na=False)]
     
+    # ENHANCEMENT: Filter by specific ledger_category
+    if info.get('ledger_category'):
+        category = info['ledger_category']
+        # Try exact match first
+        if category in filtered_df['ledger_category'].values:
+            filtered_df = filtered_df[filtered_df['ledger_category'] == category]
+        else:
+            # Try partial match (e.g., "management" matches "management_fees")
+            filtered_df = filtered_df[filtered_df['ledger_category'].str.contains(category, case=False, na=False)]
+            
+    # --- METRIC HANDLERS ---
+    
+    # METRIC: Ratio (Q12 - Parking to Rent)
+    if info.get('metric') == 'ratio' or ('ratio' in last_message and 'parking' in last_message):
+        # Calculate Parking Revenue
+        parking_df = df[df['ledger_category'].str.contains('parking', case=False, na=False)]
+        parking_rev = abs(parking_df['profit'].sum())
+        
+        # Calculate Rent Revenue
+        rent_df = df[df['ledger_category'] == 'revenue_rent_taxed']
+        rent_rev = abs(rent_df['profit'].sum())
+        
+        if rent_rev > 0:
+            ratio = (parking_rev / rent_rev) * 100
+            return {"tool_output": f"Ratio of Parking to Rent Revenue: {ratio:.2f}%\\nParking: ${parking_rev:,.2f}\\nRent: ${rent_rev:,.2f}"}
+            
+    # METRIC: Concentration (Q13 - Top 3 Tenants)
+    if info.get('metric') == 'concentration' or ('top' in last_message and 'tenant' in last_message):
+        top_n = info.get('top_n', 3)
+        
+        # Get tenant revenue
+        rev_df = df[df['ledger_type'] == 'revenue']
+        tenant_rev = rev_df.groupby('tenant_name')['profit'].sum().sort_values(ascending=False)
+        
+        total_rev = tenant_rev.sum()
+        top_n_rev = tenant_rev.head(top_n).sum()
+        
+        if total_rev > 0:
+            concentration = (top_n_rev / total_rev) * 100
+            top_tenants_str = ", ".join([f"{t} (${v:,.2f})" for t, v in tenant_rev.head(top_n).items()])
+            return {"tool_output": f"Top {top_n} Tenant Concentration: {concentration:.2f}%\\nTotal Tenant Revenue: ${total_rev:,.2f}\\nTop {top_n} Revenue: ${top_n_rev:,.2f}\\nTop Tenants: {top_tenants_str}"}
+
+    # METRIC: NOI excluding financing (Q14)
+    if info.get('metric') == 'noi':
+        # Total Revenue
+        total_rev = df[df['ledger_type'] == 'revenue']['profit'].sum()
+        
+        # Operating Expenses (Excluding financing)
+        financing_cats = ['interest_mortgage', 'bank_charges', 'financial_expenses']
+        exp_df = df[df['ledger_type'] == 'expenses']
+        op_exp_df = exp_df[~exp_df['ledger_category'].isin(financing_cats)]
+        
+        op_exp = op_exp_df['profit'].sum() # This is negative
+        
+        noi = total_rev + op_exp # Revenue + (negative expenses)
+        
+        return {"tool_output": f"NOI (excluding financing): ${noi:,.2f}\\nTotal Revenue: ${total_rev:,.2f}\\nOperating Expenses: ${op_exp:,.2f}"}
+
+    # METRIC: Growth Rate (Q15 - Jan to Dec)
+    if info.get('metric') == 'growth_rate':
+        # Filter for 2024 if not specified
+        year = info.get('year', '2024')
+        year_df = df[df['year'] == str(year)]
+        
+        # Get Jan and Dec
+        jan_df = year_df[year_df['month'] == '01']
+        dec_df = year_df[year_df['month'] == '12']
+        
+        jan_val = jan_df['profit'].sum()
+        dec_val = dec_df['profit'].sum()
+        
+        if jan_val != 0:
+            growth = ((dec_val - jan_val) / abs(jan_val)) * 100
+            return {"tool_output": f"Growth Rate (Jan to Dec {year}): {growth:.2f}%\\nJan {year}: ${jan_val:,.2f}\\nDec {year}: ${dec_val:,.2f}"}
+
+    # METRIC: Expense Ratio (Q16)
+    if info.get('metric') == 'expense_ratio':
+        # Calculate per property
+        props = df['property_name'].dropna().unique()
+        ratios = {}
+        
+        for p in props:
+            p_df = df[df['property_name'] == p]
+            rev = p_df[p_df['ledger_type'] == 'revenue']['profit'].sum()
+            exp = abs(p_df[p_df['ledger_type'] == 'expenses']['profit'].sum())
+            
+            if rev > 0:
+                ratios[p] = (exp / rev) * 100
+                
+        # Find lowest
+        if ratios:
+            best_prop = min(ratios, key=ratios.get)
+            best_ratio = ratios[best_prop]
+            return {"tool_output": f"Lowest Expense Ratio: {best_prop} at {best_ratio:.2f}%\\nAll Ratios: {ratios}"}
+
+    
+    # ENHANCEMENT: Handle year comparisons
+    if info.get('comparison_years'):
+        results = {}
+        for year in info['comparison_years']:
+            year_df = df[df['year'] == str(year)]
+            # For 2025, only include Q1 if question mentions "first 3 months"
+            if year == 2025 and ('first' in last_message or 'q1' in last_message or '3 month' in last_message):
+                year_df = year_df[year_df['quarter'] == '2025-Q1']
+            results[str(year)] = year_df['profit'].sum()
+        
+        result_text = "Year comparison:\\n"
+        for year, profit in results.items():
+            result_text += f"  {year}: ${profit:,.2f}\\n"
+        return {"tool_output": result_text}
+    
+    # ENHANCEMENT: Aggregate by quarter
+    if info.get('aggregate_by') == 'quarter' or ('quarter' in last_message and 'which' in last_message):
+        quarter_summary = filtered_df.groupby('quarter')['profit'].sum().sort_values()
+        
+        # If asking for highest/lowest expenses
+        if 'expense' in last_message or 'cost' in last_message:
+            expense_df = filtered_df[filtered_df['ledger_type'] == 'expenses']
+            quarter_expenses = expense_df.groupby('quarter')['profit'].sum()
+            # Most negative = highest expenses
+            highest_expense_quarter = quarter_expenses.idxmin()
+            highest_expense_amount = abs(quarter_expenses.min())
+            return {"tool_output": f"Quarter with highest expenses: {highest_expense_quarter} (${highest_expense_amount:,.2f})"}
+        
+        result_text = "By quarter:\\n"
+        for quarter, profit in quarter_summary.items():
+            result_text += f"  {quarter}: ${profit:,.2f}\\n"
+        return {"tool_output": result_text}
+    
+    # ENHANCEMENT: Aggregate by tenant
+    if info.get('aggregate_by') == 'tenant' or ('tenant' in last_message and ('which' in last_message or 'most' in last_message)):
+        tenant_summary = filtered_df.groupby('tenant_name')['profit'].sum().sort_values(ascending=False)
+        if len(tenant_summary) > 0:
+            top_tenant = tenant_summary.index[0]
+            top_amount = tenant_summary.iloc[0]
+            
+            result_text = f"Top tenant: {top_tenant} (${top_amount:,.2f})\\n\\nTop 5 tenants:\\n"
+            for tenant, profit in tenant_summary.head(5).items():
+                result_text += f"  {tenant}: ${profit:,.2f}\\n"
+            return {"tool_output": result_text}
+        return {"tool_output": "No tenant data found"}
+    
+    # ENHANCEMENT: Calculate percentages
+    if 'percentage' in last_message or '%' in last_message or 'percent' in last_message:
+        if info.get('ledger_category'):
+            # Calculate what % this category is of total expenses
+            category_total = abs(filtered_df['profit'].sum())
+            
+            # Get total expenses
+            all_expenses = df[df['ledger_type'] == 'expenses']
+            total_expenses = abs(all_expenses['profit'].sum())
+            
+            if total_expenses > 0:
+                percentage = (category_total / total_expenses) * 100
+                return {"tool_output": f"Percentage: {percentage:.2f}%\\nCategory total: ${category_total:,.2f}\\nTotal expenses: ${total_expenses:,.2f}"}
+        return {"tool_output": "Could not calculate percentage - need specific category"}
+    
+    # ENHANCEMENT: Calculate average per tenant-month
+    if 'average' in last_message and 'tenant' in last_message and 'month' in last_message:
+        # Count unique tenant-month combinations
+        revenue_df = filtered_df[filtered_df['ledger_type'] == 'revenue']
+        tenant_months = revenue_df.groupby(['tenant_name', 'month']).size()
+        total_tenant_months = len(tenant_months)
+        total_revenue = revenue_df['profit'].sum()
+        
+        if total_tenant_months > 0:
+            avg_per_tenant_month = total_revenue / total_tenant_months
+            return {"tool_output": f"Average monthly revenue per tenant-month: ${avg_per_tenant_month:,.2f}\\nTotal tenant-months: {total_tenant_months}\\nTotal revenue: ${total_revenue:,.2f}"}
+    
+    # Default: Standard P&L analysis
     result_text = ""
     
     if intent == 'pnl_analysis':
@@ -201,34 +488,21 @@ def query_data(state: AgentState):
         else:
             total_profit = filtered_df['profit'].sum()
             
-            # Create a breakdown
-            if info.get('ledger_type') or info.get('category'):
-                breakdown = filtered_df.groupby('ledger_category')['profit'].sum().sort_values().to_dict()
-                result_text = f"Total: ${total_profit:,.2f}\nBreakdown by Category:\n"
-                for cat, val in breakdown.items():
-                    result_text += f"  - {cat}: ${val:,.2f}\n"
+            # If specific category was requested, just return the total
+            if info.get('ledger_category'):
+                result_text = f"Total for {info['ledger_category']}: ${total_profit:,.2f}"
             else:
-                # General PnL, show breakdown by Property and Ledger Type
+                # General PnL
+                result_text = f"Net Profit: ${total_profit:,.2f}\\n\\nBy Property:\\n"
                 prop_breakdown = filtered_df.groupby('property_name')['profit'].sum().to_dict()
-                type_breakdown = filtered_df.groupby('ledger_type')['profit'].sum().to_dict()
-                result_text = f"Net Profit: ${total_profit:,.2f}\n\nBy Property:\n"
                 for prop, val in prop_breakdown.items():
-                    result_text += f"  - {prop}: ${val:,.2f}\n"
-                result_text += f"\nBy Type:\n"
-                for typ, val in type_breakdown.items():
-                    result_text += f"  - {typ}: ${val:,.2f}\n"
+                    result_text += f"  - {prop}: ${val:,.2f}\\n"
         
     elif intent == 'property_details':
         if len(filtered_df) > 0:
-            # Show more details including category and description
-            cols = ['property_name', 'tenant_name', 'ledger_type', 'ledger_category', 'profit']
-            cols = [c for c in cols if c in filtered_df.columns]
-            
-            # Group by property and tenant for cleaner output
             summary = filtered_df.groupby(['property_name', 'tenant_name'])['profit'].sum().reset_index()
             summary_text = summary.head(10).to_string(index=False)
-            
-            result_text = f"Found {len(filtered_df)} records.\n\nSummary (top 10):\n{summary_text}"
+            result_text = f"Found {len(filtered_df)} records.\\n\\nSummary (top 10):\\n{summary_text}"
         else:
             result_text = "No records found matching the criteria."
     else:

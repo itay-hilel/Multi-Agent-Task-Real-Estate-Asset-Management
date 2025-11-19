@@ -93,95 +93,67 @@ with col_title:
 
 st.divider()
 
-# --- Sidebar: System Info & Analytics ---
-with st.sidebar:
-    st.markdown("### 📊 Dashboard")
-    
-    # RAG Status Card
-    rag_status_color = "#4CAF50" if FILE_URI else "#FF5252"
-    rag_status_text = "Active" if FILE_URI else "Inactive"
-    rag_icon = "✅" if FILE_URI else "⚠️"
-    
-    st.markdown(f"""
-    <div class="metric-card" style="border-left-color: {rag_status_color};">
-        <h4 style="margin:0; color: #555;">RAG System</h4>
-        <h3 style="margin:0; color: {rag_status_color};">{rag_icon} {rag_status_text}</h3>
-        <small style="color: #888;">{FILE_URI if FILE_URI else "Setup Required"}</small>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Data Analytics Section
-    try:
-        df = pd.read_parquet(DATA_PATH)
-        df['property_name'] = df['property_name'].fillna('Entity-Level')
-        
-        # Key Metrics Grid
-        st.markdown("#### Key Performance Indicators")
-        
-        total_profit = df['profit'].sum()
-        total_revenue = df[df['profit'] > 0]['profit'].sum() # Simplified proxy if not explicit
-        
-        # Custom HTML Metrics for better control
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="display:flex; justify-content:space-between;">
-                <div>
-                    <small>Net Profit</small>
-                    <h3 style="margin:0;">{format_currency(total_profit)}</h3>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.metric("Properties", df['property_name'].nunique())
-        with col_b:
-            st.metric("Records", f"{len(df):,}")
-            
-        st.divider()
-        
-        # Charts
-        st.markdown("#### Financial Overview")
-        
-        # 1. Profit by Property (Bar Chart)
-        profit_by_prop = df.groupby('property_name')['profit'].sum().sort_values(ascending=True).tail(10)
-        fig_prop = px.bar(
-            profit_by_prop, 
-            orientation='h',
-            title="Top Performing Properties",
-            labels={'value': 'Profit ($)', 'property_name': 'Property'},
-            color_discrete_sequence=['#2E86C1'],
-            template="plotly_white"
-        )
-        fig_prop.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=300)
-        st.plotly_chart(fig_prop, use_container_width=True)
-        
-        # 2. Revenue vs Expenses (Donut or Bar)
-        # Assuming positive profit is revenue proxy and negative is expense for this viz
-        rev = df[df['profit'] > 0]['profit'].sum()
-        exp = df[df['profit'] < 0]['profit'].sum()
-        
-        fig_pie = go.Figure(data=[go.Pie(
-            labels=['Revenue', 'Expenses'], 
-            values=[rev, abs(exp)], 
-            hole=.6,
-            marker_colors=['#4CAF50', '#FF5252']
-        )])
-        fig_pie.update_layout(title="Revenue vs Expenses", margin=dict(l=0, r=0, t=30, b=0), height=250)
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Could not load analytics: {e}")
-
-# --- Chat Interface ---
-
-# Initialize session state
+# --- Initialize session state BEFORE sidebar ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "show_debug" not in st.session_state:
     st.session_state.show_debug = False
+
+# --- Sidebar: Conversation Management ---
+with st.sidebar:
+    st.markdown("### 💬 Conversations")
+    
+    # New Chat Button
+    if st.button("➕ New Chat", use_container_width=True, type="primary"):
+        st.session_state.messages = []
+        st.rerun()
+    
+    st.divider()
+    
+    # RAG Status
+    rag_status_color = "#4CAF50" if FILE_URI else "#FF5252"
+    rag_status_text = "Active" if FILE_URI else "Inactive"
+    rag_icon = "✅" if FILE_URI else "⚠️"
+    
+    st.markdown(f"""
+    <div style="padding: 0.75rem; background: #f8f9fa; border-radius: 8px; border-left: 3px solid {rag_status_color};">
+        <small style="color: #666;">RAG System</small><br>
+        <strong style="color: {rag_status_color};">{rag_icon} {rag_status_text}</strong>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # Current Conversation Summary
+    if st.session_state.messages:
+        st.markdown("#### Current Chat")
+        msg_count = len([m for m in st.session_state.messages if isinstance(m, HumanMessage)])
+        st.markdown(f"""
+        <div style="padding: 0.5rem; background: #f8f9fa; border-radius: 8px;">
+            <small style="color: #666;">Messages: {msg_count}</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # Quick Stats
+    try:
+        df = pd.read_parquet(DATA_PATH)
+        st.markdown("#### Quick Stats")
+        
+        total_profit = df['profit'].sum()
+        properties = df['property_name'].fillna('Entity-Level').nunique()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Properties", properties, label_visibility="visible")
+        with col2:
+            st.metric("Net Profit", f"${total_profit/1000:.0f}K", label_visibility="visible")
+    except:
+        pass
+
+# --- Chat Interface ---
 
 # Chat Container
 chat_container = st.container()
@@ -193,7 +165,17 @@ with chat_container:
                 st.write(msg.content)
         elif isinstance(msg, AIMessage):
             with st.chat_message("assistant", avatar="🤖"):
-                st.write(msg.content)
+                # Extract text from structured content if needed
+                content = msg.content
+                if isinstance(content, list):
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and 'text' in item:
+                            text_parts.append(item['text'])
+                        elif isinstance(item, str):
+                            text_parts.append(item)
+                    content = '\n'.join(text_parts) if text_parts else str(content)
+                st.write(content)
 
 # Input Area (Fixed at bottom by Streamlit default)
 if prompt := st.chat_input("Ask about properties, financial reports, or documents..."):
@@ -208,7 +190,18 @@ if prompt := st.chat_input("Ask about properties, financial reports, or document
                 result = agent_app.invoke(initial_state)
                 response_msg = result['messages'][-1]
                 
-                st.write(response_msg.content)
+                # Extract text from structured content if needed
+                content = response_msg.content
+                if isinstance(content, list):
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and 'text' in item:
+                            text_parts.append(item['text'])
+                        elif isinstance(item, str):
+                            text_parts.append(item)
+                    content = '\n'.join(text_parts) if text_parts else str(content)
+                
+                st.write(content)
                 st.session_state.messages.append(response_msg)
                 
                 # --- Debug / Metadata Section (Collapsible) ---
@@ -249,13 +242,18 @@ with st.sidebar:
     st.markdown("### ⚙️ Settings")
     st.session_state.show_debug = st.toggle("Debug Mode", value=st.session_state.show_debug)
     
-    with st.expander("💡 Query Examples"):
+    
+    with st.expander("💡 Example Queries"):
         st.markdown("""
-        **💰 Financials**
-        - "Total profit for Building 180?"
-        - "Show me top 5 expenses."
+        **💰 Financial Analysis**
+        - "What was total profit in 2024?"
+        - "Show me revenue for Building 180"
         
-        **📄 Documents**
-        - "What is the lease policy?"
-        - "Explain CAM charges."
+        **🏢 Property Details**
+        - "List all tenants"
+        - "What properties do we manage?"
+        
+        **📚 Documentation**
+        - "What does ledger_category mean?"
+        - "Explain entity-level expenses"
         """)

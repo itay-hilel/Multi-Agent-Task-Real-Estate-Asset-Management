@@ -1,0 +1,17 @@
+Question_Number,Difficulty,Question,Answer,Answer_Details
+1,Easy,What is the name of the entity (company) in this dataset?,PropCo,The only entity name present in all 3924 records
+2,Easy,How many buildings does PropCo manage in this portfolio?,5,"Buildings: Building 17, Building 120, Building 140, Building 160, Building 180"
+3,Easy,What is the total net profit/loss for the entire period?,€1533331.87,"Total revenue (€7,561,686.76) minus total expenses (€-6,028,354.89)"
+4,Medium,Which building generated the highest profit?,Building 120,"Building 120 generated €850,567.42 in net profit"
+5,Medium,What is the total revenue generated from taxed rent (revenue_rent_taxed)?,€2401204.99,This is the largest revenue category with 2031 transactions
+6,Medium,Which quarter had the highest total expenses?,2024-Q4,"2024-Q4 had €304,027.50 in expenses, the highest of all quarters"
+7,Hard,Which tenant generated the most revenue across all properties?,Tenant 7,"Tenant 7 contributed €880,535.66 in total revenue"
+8,Hard,What percentage of total expenses are management fees?,34.82%,"Management fees (€471,587.49) represent 34.82% of total expenses (€1,354,321.02)"
+9,Hard,How does the net profit in 2024 compare to 2025 (first 3 months)?,2024: €1171521.55 | 2025: €361810.32,"2024 full year profit was €1,171,521.55. 2025 Q1 shows €361,810.32 (strong start)"
+10,Very Hard,What is the average monthly revenue per active tenant-month?,€10734.77,"Total tenant revenue (€2,887,652.89) divided by 269 tenant-month combinations = €10,734.77 per tenant per month"
+11,Hard,What is the total amount of rent discounts given to tenants?,€185101.75,"Total discounts: €-185,101.75 across 203 transactions. Average discount per transaction: €911.83"
+12,Hard,What is the ratio of parking revenue to total rent revenue?,10.39%,"Parking revenue: €287,805.39 | Rent revenue: €2,769,002.37 | Parking represents 10.39% of rent revenue"
+13,Very Hard,What percentage of total tenant revenue comes from the top 3 tenants?,54.18%,"Top 3 tenants (Tenant 7, 14, 11) generated €1,564,556.92 out of total €2,887,652.89 tenant revenue. High concentration risk."
+14,Very Hard,What is the Net Operating Income (NOI) excluding financing costs?,€2201925.30,"NOI = Total revenue (€2,887,652.89) - Operating expenses excluding interest (€-685,727.59). Interest coverage ratio: 3.29x"
+15,Very Hard,What was the month-over-month growth rate from January to December 2024?,-12.23%,"January 2024: €88,696.59 | December 2024: €77,849.67 | Decline of 12.23% suggests seasonality or market challenges"
+16,Very Hard,Which building has the lowest expense ratio (expenses/revenue)?,Building 160 at 0.97%,"Building 160 has the most efficient operations with only 0.97% expense ratio, compared to Building 120 at 3.40%"
