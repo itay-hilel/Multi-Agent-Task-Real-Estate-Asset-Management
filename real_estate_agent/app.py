@@ -112,101 +112,52 @@ with st.sidebar:
     
     st.divider()
     
-    # RAG Status
-    rag_status_color = "#4CAF50" if FILE_URI else "#FF5252"
-    rag_status_text = "Active" if FILE_URI else "Inactive"
-    rag_icon = "✅" if FILE_URI else "⚠️"
+    # Company Context Section
+    st.markdown("### 🏢 Company Context")
     
-    st.markdown(f"""
-    <div style="padding: 0.75rem; background: #f8f9fa; border-radius: 8px; border-left: 3px solid {rag_status_color};">
-        <small style="color: #666;">RAG System</small><br>
-        <strong style="color: {rag_status_color};">{rag_icon} {rag_status_text}</strong>
-    </div>
-    """, unsafe_allow_html=True)
+    # Get current context
+    from company_context_handler import get_company_context, save_company_context, clear_company_context
+    current_context = get_company_context()
     
-    st.divider()
+    # Display current context if exists
+    if current_context:
+        with st.expander("📋 Current Context", expanded=False):
+            st.text(current_context)
     
-    # File Upload Section
-    st.markdown("### 📤 Upload Documents")
+    # Context input
+    st.markdown("**Provide information about your company:**")
+    context_input = st.text_area(
+        "Company context",
+        value=current_context if current_context else "",
+        height=200,
+        help="Describe your company, properties, and any relevant information",
+        placeholder="e.g., We are ABC Real Estate, managing 5 commercial properties in downtown...",
+        label_visibility="collapsed"
+    )
     
-    # Display current uploaded files
-    from file_upload_handler import get_current_files
-    current_files = get_current_files()
+    # Buttons
+    col1, col2 = st.columns(2)
     
-    if current_files:
-        st.markdown("**Current Files:**")
-        for file_info in current_files:
-            st.caption(f"• {file_info.get('display_name', 'Unknown')}")
-    else:
-        st.caption("No files uploaded yet")
-    
-    # Tab selection for upload method
-    upload_tab1, upload_tab2 = st.tabs(["📁 Upload Files", "✍️ Paste Text"])
-    
-    with upload_tab1:
-        # File uploader
-        uploaded_files = st.file_uploader(
-            "Upload documents",
-            type=['pdf', 'md', 'txt', 'docx', 'pages'],
-            accept_multiple_files=True,
-            help="Upload PDF, Markdown, Text, DOCX, or Pages files"
-        )
-        
-        # Upload button
-        if uploaded_files:
-            if st.button("🚀 Upload Files", use_container_width=True, type="primary", key="upload_files_btn"):
-                from file_upload_handler import upload_files
-                
-                with st.spinner("Uploading files..."):
-                    successful_uploads, error_messages = upload_files(uploaded_files, api_key)
-                
-                # Show results
-                if successful_uploads:
-                    st.success(f"✅ Successfully uploaded {len(successful_uploads)} file(s)!")
-                    for file_info in successful_uploads:
-                        st.caption(f"  ✓ {file_info['display_name']}")
-                    # Rerun to update the file list
-                    time.sleep(1)
+    with col1:
+        if st.button("💾 Save Context", use_container_width=True, type="primary"):
+            if context_input.strip():
+                if save_company_context(context_input):
+                    st.success("✅ Context saved!")
+                    time.sleep(0.5)
                     st.rerun()
-                
-                if error_messages:
-                    for error in error_messages:
-                        st.error(error)
-    
-    with upload_tab2:
-        # Text input area
-        text_input = st.text_area(
-            "Paste your text here",
-            height=200,
-            help="Paste text content to add to the File Search system",
-            placeholder="Enter or paste text content here..."
-        )
-        
-        # Document name input
-        doc_name = st.text_input(
-            "Document name",
-            value="pasted_text",
-            help="Name for this text document"
-        )
-        
-        # Upload text button
-        if text_input and doc_name:
-            if st.button("🚀 Upload Text", use_container_width=True, type="primary", key="upload_text_btn"):
-                from file_upload_handler import upload_text_as_document, update_file_search_config
-                
-                with st.spinner("Uploading text..."):
-                    file_info = upload_text_as_document(text_input, doc_name, api_key)
-                
-                if file_info:
-                    # Update config
-                    if update_file_search_config([file_info]):
-                        st.success(f"✅ Successfully uploaded text as '{doc_name}.txt'!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("Failed to update configuration.")
                 else:
-                    st.error("Failed to upload text. Please try again.")
+                    st.error("Failed to save context")
+            else:
+                st.warning("Please enter some context first")
+    
+    with col2:
+        if current_context and st.button("🗑️ Clear", use_container_width=True):
+            if clear_company_context():
+                st.success("Context cleared")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("Failed to clear context")
     
     st.divider()
     

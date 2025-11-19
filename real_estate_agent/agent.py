@@ -81,8 +81,6 @@ class AgentState(TypedDict):
 def classify_intent(state: AgentState):
     """
     Classifies the user's intent into one of the known categories.
-    
-    NEW: Added 'document_search' intent for conceptual questions
     """
     messages = state['messages']
     last_message = messages[-1].content
@@ -97,12 +95,8 @@ def classify_intent(state: AgentState):
     - 'property_details': Questions about specific property details, tenants, lease terms, property information.
       Examples: "List tenants in Building 180", "What properties do we manage?", "Who rents from us?"
     
-    - 'document_search': Questions about system structure, data definitions, how things work, explanations of concepts.
-      Examples: "What does ledger_category mean?", "Explain entity-level expenses", "What columns are in the data?",
-               "How is the P&L structured?", "What revenue types do we track?"
-    
-    - 'general_chat': Greetings, general questions not related to specific data or documentation.
-      Examples: "Hello", "How are you?", "What can you do?"
+    - 'general_chat': Greetings, general questions, company information questions.
+      Examples: "Hello", "How are you?", "What can you do?", "Tell me about the company"
     
     User Query: {last_message}
     
@@ -125,7 +119,7 @@ def classify_intent(state: AgentState):
     intent = str(content).strip().lower()
     
     # Fallback for unclear responses
-    valid_intents = ['pnl_analysis', 'property_details', 'document_search', 'general_chat']
+    valid_intents = ['pnl_analysis', 'property_details', 'general_chat']
     if intent not in valid_intents:
         intent = 'general_chat'
     
@@ -714,37 +708,30 @@ def generate_visualization(state: AgentState):
 def generate_response(state: AgentState):
     """
     Generates the final natural language response.
-    
-    ENHANCED: Now includes grounding sources if available
+    Injects company context into system prompts for personalization.
     """
+    from company_context_handler import format_context_for_prompt
+    
     messages = state['messages']
     intent = state['intent']
     tool_output = state.get('tool_output', "")
     extracted = state.get('extracted_info', {})
-    grounding_sources = state.get('grounding_sources', [])
     
-    # For document_search, the tool_output already contains the answer
-    if intent == 'document_search':
-        response_text = tool_output
-        
-        # Add sources if available
-        if grounding_sources:
-            response_text += "\n\n📚 **Sources:**\n"
-            for source in grounding_sources:
-                response_text += f"- {source}\n"
-        
-        return {"messages": [AIMessage(content=response_text)]}
+    # Get company context
+    company_context = format_context_for_prompt()
     
     # For general chat
     if intent == 'general_chat':
         prompt = f"""
         You are a helpful Real Estate Asset Manager Assistant.
+        {company_context}
         User Query: {messages[-1].content}
         
-        Provide a friendly response. Mention that you can help with:
+        Provide a friendly response. If company context is provided, use it to personalize your response.
+        Mention that you can help with:
         - Financial analysis (P&L, revenue, expenses)
         - Property details (tenants, properties)
-        - System explanations (data structure, definitions)
+        - Company information (if context is available)
         """
         response = llm.invoke(prompt)
         return {"messages": [response]}
@@ -752,6 +739,7 @@ def generate_response(state: AgentState):
     # For data queries (pnl_analysis, property_details)
     prompt = f"""
     You are a Real Estate Asset Manager Assistant.
+    {company_context}
     User Query: {messages[-1].content}
     Intent: {intent}
     Extracted Info: {extracted}
@@ -762,6 +750,7 @@ def generate_response(state: AgentState):
     - Numbers are already formatted as currency
     - If 'Entity-Level' appears, explain these are corporate expenses not tied to a specific property
     - Be conversational but professional
+    - If company context is provided, use it to personalize your response
     """
     response = llm.invoke(prompt)
     return {"messages": [response]}
@@ -772,7 +761,6 @@ workflow = StateGraph(AgentState)
 workflow.add_node("classify_intent", classify_intent)
 workflow.add_node("extract_info", extract_info)
 workflow.add_node("query_data", query_data)
-workflow.add_node("query_file_search", query_file_search)
 workflow.add_node("generate_visualization", generate_visualization)
 workflow.add_node("generate_response", generate_response)
 
@@ -781,15 +769,11 @@ workflow.set_entry_point("classify_intent")
 def route_intent(state: AgentState):
     """
     Routes to appropriate node based on intent.
-    
-    NEW: Added routing for document_search
     """
     intent = state['intent']
     
     if intent == 'general_chat':
         return "generate_response"
-    elif intent == 'document_search':
-        return "query_file_search"
     else:
         # pnl_analysis or property_details
         return "extract_info"
@@ -799,7 +783,6 @@ workflow.add_conditional_edges(
     route_intent,
     {
         "generate_response": "generate_response",
-        "query_file_search": "query_file_search",
         "extract_info": "extract_info"
     }
 )
@@ -807,7 +790,6 @@ workflow.add_conditional_edges(
 workflow.add_edge("extract_info", "query_data")
 workflow.add_edge("query_data", "generate_visualization")
 workflow.add_edge("generate_visualization", "generate_response")
-workflow.add_edge("query_file_search", "generate_response")
 workflow.add_edge("generate_response", END)
 
 app = workflow.compile()
