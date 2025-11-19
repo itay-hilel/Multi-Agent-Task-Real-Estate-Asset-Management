@@ -220,88 +220,150 @@ if prompt := st.chat_input("Ask about properties, financial reports, or document
         st.write(prompt)
 
     with st.chat_message("assistant", avatar="🤖"):
-        with st.spinner("Thinking..."):
-            try:
-                initial_state = {"messages": st.session_state.messages}
-                result = agent_app.invoke(initial_state)
-                response_msg = result['messages'][-1]
+        try:
+            initial_state = {"messages": st.session_state.messages}
+            result = initial_state.copy()
+            
+            with st.status("Thinking...", expanded=True) as status:
+                import random
                 
-                # Extract text from structured content if needed
-                content = response_msg.content
-                if isinstance(content, list):
-                    text_parts = []
-                    for item in content:
-                        if isinstance(item, dict) and 'text' in item:
-                            text_parts.append(item['text'])
-                        elif isinstance(item, str):
-                            text_parts.append(item)
-                    content = '\n'.join(text_parts) if text_parts else str(content)
+                # Themed Status Messages
+                msgs_intent = [
+                    "Reviewing your request...",
+                    "Consulting the property manager...",
+                    "Analyzing your question...",
+                    "Checking property records..."
+                ]
+                msgs_extract = [
+                    "Identifying key property details...",
+                    "Looking up tenant records...",
+                    "Parsing financial parameters...",
+                    "Locating specific assets..."
+                ]
+                msgs_query = [
+                    "Pulling financial reports...",
+                    "Accessing the ledger...",
+                    "Retrieving lease agreements...",
+                    "Querying the database..."
+                ]
+                msgs_viz = [
+                    "Charting performance metrics...",
+                    "Visualizing the data...",
+                    "Generating market insights...",
+                    "Preparing visual reports..."
+                ]
+                msgs_response = [
+                    "Drafting the executive summary...",
+                    "Preparing your report...",
+                    "Finalizing the analysis...",
+                    "Compiling the results..."
+                ]
+
+                for output in agent_app.stream(initial_state):
+                    for node_name, node_output in output.items():
+                        result.update(node_output)
+                        
+                        if node_name == "classify_intent":
+                            intent = node_output.get("intent", "unknown")
+                            st.markdown(f"**Intent:** `{intent}`")
+                            status.update(label=random.choice(msgs_intent), state="running")
+                            
+                        elif node_name == "extract_info":
+                            st.markdown("Extracted parameters.")
+                            status.update(label=random.choice(msgs_extract), state="running")
+                            
+                        elif node_name == "query_data":
+                            st.markdown("Retrieved data.")
+                            status.update(label=random.choice(msgs_query), state="running")
+                            
+                        elif node_name == "generate_visualization":
+                            if node_output.get("visualization_config"):
+                                st.markdown("Generated visualization.")
+                            status.update(label=random.choice(msgs_response), state="running")
+                            
+                        elif node_name == "generate_response":
+                             status.update(label=random.choice(msgs_response), state="running")
                 
-                st.write(content)
-                st.session_state.messages.append(response_msg)
+                status.update(label="Complete", state="complete", expanded=False)
+
+            response_msg = result['messages'][-1]
                 
-                # --- Debug / Metadata Section (Collapsible) ---
-                if st.session_state.show_debug:
-                    with st.expander("🔍 Agent Analysis", expanded=True):
-                        intent = result.get('intent', 'unknown')
+            # Extract text from structured content if needed
+            content = response_msg.content
+            if isinstance(content, list):
+                text_parts = []
+                for item in content:
+                    if isinstance(item, dict) and 'text' in item:
+                        text_parts.append(item['text'])
+                    elif isinstance(item, str):
+                        text_parts.append(item)
+                content = '\n'.join(text_parts) if text_parts else str(content)
+            
+            st.write(content)
+            st.session_state.messages.append(response_msg)
+            
+            # --- Debug / Metadata Section (Collapsible) ---
+            if st.session_state.show_debug:
+                with st.expander("🔍 Agent Analysis", expanded=True):
+                    intent = result.get('intent', 'unknown')
+                    
+                    # Intent Badges
+                    intent_map = {
+                        'pnl_analysis': ('Data Analysis', 'badge-data'),
+                        'property_details': ('Property Query', 'badge-data'),
+                        'document_search': ('Document Search', 'badge-doc'),
+                        'general_chat': ('General Chat', 'badge-chat')
+                    }
+                    
+                    label, badge_class = intent_map.get(intent, (intent, 'badge-data'))
+                    st.markdown(f"""
+                        <div style="margin-bottom:10px;">
+                            <span class="knowledge-badge {badge_class}">{label}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Context
+                    if intent == 'document_search' and result.get('grounding_sources'):
+                        st.markdown("**📚 Sources:**")
+                        for source in result['grounding_sources']:
+                            st.caption(f"• {source}")
+                    
+                    if intent in ['pnl_analysis', 'property_details']:
+                        st.json(result.get('extracted_info', {}))
                         
-                        # Intent Badges
-                        intent_map = {
-                            'pnl_analysis': ('Data Analysis', 'badge-data'),
-                            'property_details': ('Property Query', 'badge-data'),
-                            'document_search': ('Document Search', 'badge-doc'),
-                            'general_chat': ('General Chat', 'badge-chat')
-                        }
+                    # Visualization
+                    viz_config = result.get('visualization_config')
+                    structured_data = result.get('structured_data')
+                    
+                    if viz_config and structured_data:
+                        st.markdown("### 📊 Visualization")
                         
-                        label, badge_class = intent_map.get(intent, (intent, 'badge-data'))
-                        st.markdown(f"""
-                            <div style="margin-bottom:10px;">
-                                <span class="knowledge-badge {badge_class}">{label}</span>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Context
-                        if intent == 'document_search' and result.get('grounding_sources'):
-                            st.markdown("**📚 Sources:**")
-                            for source in result['grounding_sources']:
-                                st.caption(f"• {source}")
-                        
-                        if intent in ['pnl_analysis', 'property_details']:
-                            st.json(result.get('extracted_info', {}))
+                        if viz_config['type'] == 'bar':
+                            fig = px.bar(
+                                structured_data, 
+                                x=viz_config['x'], 
+                                y=viz_config['y'],
+                                color=viz_config['color'],
+                                title=viz_config['title']
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
                             
-                        # Visualization
-                        viz_config = result.get('visualization_config')
-                        structured_data = result.get('structured_data')
+                        elif viz_config['type'] == 'line':
+                            fig = px.line(
+                                structured_data, 
+                                x=viz_config['x'], 
+                                y=viz_config['y'],
+                                title=viz_config['title'],
+                                markers=True
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                    if structured_data:
+                        with st.expander("📋 Data Table", expanded=False):
+                            st.dataframe(structured_data, use_container_width=True)
                         
-                        if viz_config and structured_data:
-                            st.markdown("### 📊 Visualization")
-                            
-                            if viz_config['type'] == 'bar':
-                                fig = px.bar(
-                                    structured_data, 
-                                    x=viz_config['x'], 
-                                    y=viz_config['y'],
-                                    color=viz_config['color'],
-                                    title=viz_config['title']
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                                
-                            elif viz_config['type'] == 'line':
-                                fig = px.line(
-                                    structured_data, 
-                                    x=viz_config['x'], 
-                                    y=viz_config['y'],
-                                    title=viz_config['title'],
-                                    markers=True
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                                
-                        if structured_data:
-                            with st.expander("📋 Data Table", expanded=False):
-                                st.dataframe(structured_data, use_container_width=True)
-                            
-            except Exception as e:
-                st.error(f"Error: {e}")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 # --- Footer / Settings ---
 with st.sidebar:
