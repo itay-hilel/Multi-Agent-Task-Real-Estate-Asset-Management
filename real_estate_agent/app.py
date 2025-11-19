@@ -233,6 +233,37 @@ if prompt := st.chat_input("Ask about properties, financial reports, or document
                         if intent in ['pnl_analysis', 'property_details']:
                             st.json(result.get('extracted_info', {}))
                             
+                        # Visualization
+                        viz_config = result.get('visualization_config')
+                        structured_data = result.get('structured_data')
+                        
+                        if viz_config and structured_data:
+                            st.markdown("### 📊 Visualization")
+                            
+                            if viz_config['type'] == 'bar':
+                                fig = px.bar(
+                                    structured_data, 
+                                    x=viz_config['x'], 
+                                    y=viz_config['y'],
+                                    color=viz_config['color'],
+                                    title=viz_config['title']
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                            elif viz_config['type'] == 'line':
+                                fig = px.line(
+                                    structured_data, 
+                                    x=viz_config['x'], 
+                                    y=viz_config['y'],
+                                    title=viz_config['title'],
+                                    markers=True
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                        if structured_data:
+                            with st.expander("📋 Data Table", expanded=False):
+                                st.dataframe(structured_data, use_container_width=True)
+                            
             except Exception as e:
                 st.error(f"Error: {e}")
 

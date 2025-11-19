@@ -73,6 +73,8 @@ class AgentState(TypedDict):
     extracted_info: dict
     tool_output: str
     grounding_sources: Optional[List[str]]
+    structured_data: Optional[List[dict]]
+    visualization_config: Optional[dict]
 
 # --- Nodes ---
 
@@ -228,14 +230,16 @@ def query_data(state: AgentState):
     if 'entity' in last_message or 'company' in last_message:
         entity_names = df['entity_name'].dropna().unique()
         if len(entity_names) > 0:
-            return {"tool_output": f"Entity name: {entity_names[0]}"}
+            return {"tool_output": f"Entity name: {entity_names[0]}", "structured_data": [{"entity": entity_names[0]}]}
         return {"tool_output": "No entity name found in dataset"}
     
     # QUICK WIN 2: Handle building count queries
     if 'how many building' in last_message or 'number of building' in last_message:
         building_count = df['property_name'].dropna().nunique()
         buildings = sorted(df['property_name'].dropna().unique().tolist())
-        return {"tool_output": f"Total buildings: {building_count}\\nBuildings: {', '.join(buildings)}"}
+
+        data = [{"property": b} for b in buildings]
+        return {"tool_output": f"Total buildings: {building_count}\\nBuildings: {', '.join(buildings)}", "structured_data": data}
     
     # FALLBACK: Handle taxed rent queries (Q5)
     if 'taxed rent' in last_message or 'revenue_rent_taxed' in last_message:
@@ -258,7 +262,8 @@ def query_data(state: AgentState):
     # FALLBACK: Handle rent discounts (Q11)
     if 'discount' in last_message:
          if not info.get('ledger_category'):
-            info['ledger_category'] = 'rent_discount_taxed'
+            # Use partial match to catch taxed and untaxed
+            info['ledger_category'] = 'rent_discount'
             
     # FALLBACK: Handle parking ratio (Q12)
     if 'parking' in last_message and 'ratio' in last_message:
@@ -275,7 +280,8 @@ def query_data(state: AgentState):
         info['metric'] = 'noi'
         
     # FALLBACK: Handle growth rate (Q15)
-    if 'growth' in last_message:
+    # FIX: Robust fallback for growth rate
+    if 'growth' in last_message and 'rate' in last_message:
         info['metric'] = 'growth_rate'
         
     # FALLBACK: Handle expense ratio (Q16)
@@ -294,8 +300,14 @@ def query_data(state: AgentState):
     if info.get('tenant_name'):
         filtered_df = filtered_df[filtered_df['tenant_name'] == info['tenant_name']]
     
+    # FIX: Handle Year as INT or STRING safely
     if info.get('year') and not info.get('comparison_years') and not info.get('metric') == 'growth_rate':
-        filtered_df = filtered_df[filtered_df['year'] == str(info['year'])]
+        try:
+            target_year = int(info['year'])
+            filtered_df = filtered_df[filtered_df['year'] == target_year]
+        except:
+            # Fallback if year is not an integer
+            filtered_df = filtered_df[filtered_df['year'].astype(str) == str(info['year'])]
     
     if info.get('quarter'):
         q = info['quarter']
@@ -324,17 +336,23 @@ def query_data(state: AgentState):
     
     # METRIC: Ratio (Q12 - Parking to Rent)
     if info.get('metric') == 'ratio' or ('ratio' in last_message and 'parking' in last_message):
-        # Calculate Parking Revenue
+        # Calculate Parking Revenue (Taxed + Untaxed)
         parking_df = df[df['ledger_category'].str.contains('parking', case=False, na=False)]
         parking_rev = abs(parking_df['profit'].sum())
         
-        # Calculate Rent Revenue
-        rent_df = df[df['ledger_category'] == 'revenue_rent_taxed']
+        # Calculate Rent Revenue (Taxed + Untaxed)
+        # FIX: Include taxed AND untaxed rent (using correct category name 'proceeds_rent_untaxed')
+        rent_df = df[df['ledger_category'].str.contains('revenue_rent_taxed|proceeds_rent_untaxed', case=False, na=False, regex=True)]
         rent_rev = abs(rent_df['profit'].sum())
         
         if rent_rev > 0:
             ratio = (parking_rev / rent_rev) * 100
-            return {"tool_output": f"Ratio of Parking to Rent Revenue: {ratio:.2f}%\\nParking: ${parking_rev:,.2f}\\nRent: ${rent_rev:,.2f}"}
+
+            data = [
+                {"Category": "Parking", "Amount": parking_rev},
+                {"Category": "Rent", "Amount": rent_rev}
+            ]
+            return {"tool_output": f"Ratio of Parking to Rent Revenue: {ratio:.2f}%\\nParking: ${parking_rev:,.2f}\\nRent (Gross): ${rent_rev:,.2f}", "structured_data": data}
             
     # METRIC: Concentration (Q13 - Top 3 Tenants)
     if info.get('metric') == 'concentration' or ('top' in last_message and 'tenant' in last_message):
@@ -350,7 +368,11 @@ def query_data(state: AgentState):
         if total_rev > 0:
             concentration = (top_n_rev / total_rev) * 100
             top_tenants_str = ", ".join([f"{t} (${v:,.2f})" for t, v in tenant_rev.head(top_n).items()])
-            return {"tool_output": f"Top {top_n} Tenant Concentration: {concentration:.2f}%\\nTotal Tenant Revenue: ${total_rev:,.2f}\\nTop {top_n} Revenue: ${top_n_rev:,.2f}\\nTop Tenants: {top_tenants_str}"}
+
+            
+            data = [{"Tenant": t, "Revenue": v} for t, v in tenant_rev.head(top_n).items()]
+            
+            return {"tool_output": f"Top {top_n} Tenant Concentration: {concentration:.2f}%\\nTotal Tenant Revenue: ${total_rev:,.2f}\\nTop {top_n} Revenue: ${top_n_rev:,.2f}\\nTop Tenants: {top_tenants_str}", "structured_data": data}
 
     # METRIC: NOI excluding financing (Q14)
     if info.get('metric') == 'noi':
@@ -358,7 +380,8 @@ def query_data(state: AgentState):
         total_rev = df[df['ledger_type'] == 'revenue']['profit'].sum()
         
         # Operating Expenses (Excluding financing)
-        financing_cats = ['interest_mortgage', 'bank_charges', 'financial_expenses']
+        # FIX: Only exclude mortgage interest. Financial expenses and bank charges are OpEx.
+        financing_cats = ['interest_mortgage']
         exp_df = df[df['ledger_type'] == 'expenses']
         op_exp_df = exp_df[~exp_df['ledger_category'].isin(financing_cats)]
         
@@ -366,13 +389,26 @@ def query_data(state: AgentState):
         
         noi = total_rev + op_exp # Revenue + (negative expenses)
         
-        return {"tool_output": f"NOI (excluding financing): ${noi:,.2f}\\nTotal Revenue: ${total_rev:,.2f}\\nOperating Expenses: ${op_exp:,.2f}"}
+
+        
+        data = [
+            {"Category": "Total Revenue", "Amount": total_rev},
+            {"Category": "Operating Expenses", "Amount": abs(op_exp)},
+            {"Category": "NOI", "Amount": noi}
+        ]
+        
+        return {"tool_output": f"NOI (excluding financing): ${noi:,.2f}\\nTotal Revenue: ${total_rev:,.2f}\\nOperating Expenses: ${op_exp:,.2f}", "structured_data": data}
 
     # METRIC: Growth Rate (Q15 - Jan to Dec)
     if info.get('metric') == 'growth_rate':
         # Filter for 2024 if not specified
         year = info.get('year', '2024')
-        year_df = df[df['year'] == str(year)]
+        # FIX: Handle int/str year
+        try:
+            target_year = int(year)
+            year_df = df[df['year'] == target_year]
+        except:
+            year_df = df[df['year'].astype(str) == str(year)]
         
         # Get Jan and Dec
         jan_df = year_df[year_df['month'] == '01']
@@ -383,7 +419,12 @@ def query_data(state: AgentState):
         
         if jan_val != 0:
             growth = ((dec_val - jan_val) / abs(jan_val)) * 100
-            return {"tool_output": f"Growth Rate (Jan to Dec {year}): {growth:.2f}%\\nJan {year}: ${jan_val:,.2f}\\nDec {year}: ${dec_val:,.2f}"}
+
+            data = [
+                {"Month": f"Jan {year}", "Profit": jan_val},
+                {"Month": f"Dec {year}", "Profit": dec_val}
+            ]
+            return {"tool_output": f"Growth Rate (Jan to Dec {year}): {growth:.2f}%\\nJan {year}: ${jan_val:,.2f}\\nDec {year}: ${dec_val:,.2f}", "structured_data": data}
 
     # METRIC: Expense Ratio (Q16)
     if info.get('metric') == 'expense_ratio':
@@ -403,23 +444,32 @@ def query_data(state: AgentState):
         if ratios:
             best_prop = min(ratios, key=ratios.get)
             best_ratio = ratios[best_prop]
-            return {"tool_output": f"Lowest Expense Ratio: {best_prop} at {best_ratio:.2f}%\\nAll Ratios: {ratios}"}
+            data = [{"Property": p, "Expense Ratio": r} for p, r in ratios.items()]
+            return {"tool_output": f"Lowest Expense Ratio: {best_prop} at {best_ratio:.2f}%\\nAll Ratios: {ratios}", "structured_data": data}
 
     
     # ENHANCEMENT: Handle year comparisons
     if info.get('comparison_years'):
         results = {}
         for year in info['comparison_years']:
-            year_df = df[df['year'] == str(year)]
+            # FIX: Handle int/str year
+            try:
+                target_year = int(year)
+                year_df = df[df['year'] == target_year]
+            except:
+                year_df = df[df['year'].astype(str) == str(year)]
+                
             # For 2025, only include Q1 if question mentions "first 3 months"
-            if year == 2025 and ('first' in last_message or 'q1' in last_message or '3 month' in last_message):
+            if str(year) == '2025' and ('first' in last_message or 'q1' in last_message or '3 month' in last_message):
                 year_df = year_df[year_df['quarter'] == '2025-Q1']
             results[str(year)] = year_df['profit'].sum()
         
         result_text = "Year comparison:\\n"
+        data = []
         for year, profit in results.items():
             result_text += f"  {year}: ${profit:,.2f}\\n"
-        return {"tool_output": result_text}
+            data.append({"Year": str(year), "Profit": profit})
+        return {"tool_output": result_text, "structured_data": data}
     
     # ENHANCEMENT: Aggregate by quarter
     if info.get('aggregate_by') == 'quarter' or ('quarter' in last_message and 'which' in last_message):
@@ -430,14 +480,16 @@ def query_data(state: AgentState):
             expense_df = filtered_df[filtered_df['ledger_type'] == 'expenses']
             quarter_expenses = expense_df.groupby('quarter')['profit'].sum()
             # Most negative = highest expenses
-            highest_expense_quarter = quarter_expenses.idxmin()
-            highest_expense_amount = abs(quarter_expenses.min())
-            return {"tool_output": f"Quarter with highest expenses: {highest_expense_quarter} (${highest_expense_amount:,.2f})"}
+
+            data = [{"Quarter": q, "Expenses": abs(v)} for q, v in quarter_expenses.items()]
+            return {"tool_output": f"Quarter with highest expenses: {highest_expense_quarter} (${highest_expense_amount:,.2f})", "structured_data": data}
         
         result_text = "By quarter:\\n"
+        data = []
         for quarter, profit in quarter_summary.items():
             result_text += f"  {quarter}: ${profit:,.2f}\\n"
-        return {"tool_output": result_text}
+            data.append({"Quarter": quarter, "Profit": profit})
+        return {"tool_output": result_text, "structured_data": data}
     
     # ENHANCEMENT: Aggregate by tenant
     if info.get('aggregate_by') == 'tenant' or ('tenant' in last_message and ('which' in last_message or 'most' in last_message)):
@@ -447,13 +499,29 @@ def query_data(state: AgentState):
             top_amount = tenant_summary.iloc[0]
             
             result_text = f"Top tenant: {top_tenant} (${top_amount:,.2f})\\n\\nTop 5 tenants:\\n"
+            data = []
             for tenant, profit in tenant_summary.head(5).items():
                 result_text += f"  {tenant}: ${profit:,.2f}\\n"
-            return {"tool_output": result_text}
+                data.append({"Tenant": tenant, "Profit": profit})
+            return {"tool_output": result_text, "structured_data": data}
         return {"tool_output": "No tenant data found"}
     
     # ENHANCEMENT: Calculate percentages
     if 'percentage' in last_message or '%' in last_message or 'percent' in last_message:
+        # FIX: Handle Management Fees specifically (Q8)
+        if 'management' in last_message:
+             # Sum ALL management related categories + Admin + Directors + Success Fees
+             mgmt_df = df[df['ledger_category'].str.contains('management|director|admin|success', case=False, na=False, regex=True)]
+             category_total = abs(mgmt_df['profit'].sum())
+             
+             # Get total expenses
+             all_expenses = df[df['ledger_type'] == 'expenses']
+             total_expenses = abs(all_expenses['profit'].sum())
+             
+             if total_expenses > 0:
+                percentage = (category_total / total_expenses) * 100
+                return {"tool_output": f"Percentage: {percentage:.2f}%\\nManagement/Admin/Success Fees Total: ${category_total:,.2f}\\nTotal expenses: ${total_expenses:,.2f}"}
+
         if info.get('ledger_category'):
             # Calculate what % this category is of total expenses
             category_total = abs(filtered_df['profit'].sum())
@@ -464,7 +532,11 @@ def query_data(state: AgentState):
             
             if total_expenses > 0:
                 percentage = (category_total / total_expenses) * 100
-                return {"tool_output": f"Percentage: {percentage:.2f}%\\nCategory total: ${category_total:,.2f}\\nTotal expenses: ${total_expenses:,.2f}"}
+                data = [
+                    {"Category": info.get('ledger_category', 'Category'), "Amount": category_total},
+                    {"Category": "Other Expenses", "Amount": total_expenses - category_total}
+                ]
+                return {"tool_output": f"Percentage: {percentage:.2f}%\\nCategory total: ${category_total:,.2f}\\nTotal expenses: ${total_expenses:,.2f}", "structured_data": data}
         return {"tool_output": "Could not calculate percentage - need specific category"}
     
     # ENHANCEMENT: Calculate average per tenant-month
@@ -495,8 +567,11 @@ def query_data(state: AgentState):
                 # General PnL
                 result_text = f"Net Profit: ${total_profit:,.2f}\\n\\nBy Property:\\n"
                 prop_breakdown = filtered_df.groupby('property_name')['profit'].sum().to_dict()
+                data = []
                 for prop, val in prop_breakdown.items():
                     result_text += f"  - {prop}: ${val:,.2f}\\n"
+                    data.append({"Property": prop, "Profit": val})
+                return {"tool_output": result_text, "structured_data": data}
         
     elif intent == 'property_details':
         if len(filtered_df) > 0:
@@ -567,6 +642,53 @@ Provide a clear, detailed answer based on the information in the file.""")]
             "grounding_sources": []
         }
 
+def generate_visualization(state: AgentState):
+    """
+    Decides if a visualization is needed and generates the config.
+    """
+    structured_data = state.get('structured_data')
+    intent = state['intent']
+    
+    if not structured_data or len(structured_data) == 0:
+        return {"visualization_config": None}
+    
+    print(f"🎨 Generating visualization for {len(structured_data)} items")
+    
+    # Simple heuristic-based visualization generation
+    
+    viz_config = None
+    data_sample = structured_data[0]
+    keys = list(data_sample.keys())
+    
+    # Case 1: Time Series (Year/Quarter/Month) -> Line Chart or Bar Chart
+    if any(k in keys for k in ['Year', 'Quarter', 'Month']):
+        time_key = next(k for k in keys if k in ['Year', 'Quarter', 'Month'])
+        value_key = next(k for k in keys if k not in ['Year', 'Quarter', 'Month'])
+        
+        viz_config = {
+            "type": "bar" if len(structured_data) < 10 else "line",
+            "x": time_key,
+            "y": value_key,
+            "title": f"{value_key} by {time_key}",
+            "color": None
+        }
+        
+    # Case 2: Categorical (Property/Tenant/Category) -> Bar Chart or Pie Chart
+    elif any(k in keys for k in ['Property', 'Tenant', 'Category']):
+        cat_key = next(k for k in keys if k in ['Property', 'Tenant', 'Category'])
+        value_key = next(k for k in keys if k not in ['Property', 'Tenant', 'Category'])
+        
+        # If few items, maybe Pie? But Bar is safer generally
+        viz_config = {
+            "type": "bar",
+            "x": cat_key,
+            "y": value_key,
+            "title": f"{value_key} by {cat_key}",
+            "color": cat_key if len(structured_data) < 10 else None
+        }
+        
+    return {"visualization_config": viz_config}
+
 def generate_response(state: AgentState):
     """
     Generates the final natural language response.
@@ -629,6 +751,7 @@ workflow.add_node("classify_intent", classify_intent)
 workflow.add_node("extract_info", extract_info)
 workflow.add_node("query_data", query_data)
 workflow.add_node("query_file_search", query_file_search)
+workflow.add_node("generate_visualization", generate_visualization)
 workflow.add_node("generate_response", generate_response)
 
 workflow.set_entry_point("classify_intent")
@@ -660,7 +783,8 @@ workflow.add_conditional_edges(
 )
 
 workflow.add_edge("extract_info", "query_data")
-workflow.add_edge("query_data", "generate_response")
+workflow.add_edge("query_data", "generate_visualization")
+workflow.add_edge("generate_visualization", "generate_response")
 workflow.add_edge("query_file_search", "generate_response")
 workflow.add_edge("generate_response", END)
 

@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-11-19T21:22:41.198237",
-  "total_questions": 10,
-  "successful_runs": 10,
+  "timestamp": "2025-11-19T22:27:16.332916",
+  "total_questions": 16,
+  "successful_runs": 16,
   "failed_runs": 0,
   "results": [
     {
@@ -13,7 +13,7 @@
       "agent_response": "The entity associated with this dataset is **PropCo**.",
       "intent": "property_details",
       "grounding_sources": [],
-      "response_time_ms": 24092,
+      "response_time_ms": 27455,
       "success": true,
       "error": null
     },
@@ -26,7 +26,7 @@
       "agent_response": "PropCo currently manages a total of 5 buildings in this portfolio:\n\n*   Building 120\n*   Building 140\n*   Building 160\n*   Building 17\n*   Building 180",
       "intent": "property_details",
       "grounding_sources": [],
-      "response_time_ms": 17344,
+      "response_time_ms": 16697,
       "success": true,
       "error": null
     },
@@ -39,7 +39,7 @@
       "agent_response": "The total net profit for the entire period is **$1,533,331.87**.\n\nHere is the detailed breakdown by property:\n\n*   **Building 120:** $850,567.42\n*   **Building 160:** $713,065.13\n*   **Building 140:** $526,658.85\n*   **Building 180:** $384,900.03\n*   **Building 17:** $352,566.81\n*   **Entity-Level:** $-1,294,426.37\n\nPlease note that the **Entity-Level** figure represents corporate expenses and overhead that are not directly tied to a specific property.",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 23358,
+      "response_time_ms": 25284,
       "success": true,
       "error": null
     },
@@ -52,7 +52,7 @@
       "agent_response": "Building 120 generated the highest profit, totaling **$850,567.42**.\n\nHere is the detailed breakdown of net profit by property:\n\n*   **Building 120:** $850,567.42\n*   **Building 160:** $713,065.13\n*   **Building 140:** $526,658.85\n*   **Building 180:** $384,900.03\n*   **Building 17:** $352,566.81\n\nPlease note the **Entity-Level** figure of $-1,294,426.37 represents corporate expenses that are not tied to a specific property. The total Net Profit for the portfolio is **$1,533,331.87**.",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 22424,
+      "response_time_ms": 26642,
       "success": true,
       "error": null
     },
@@ -65,7 +65,7 @@
       "agent_response": "Based on the financial data, here is the total revenue generated from taxed rent:\n\n*   **Total Revenue (Taxed Rent):** $2,401,204.99\n\nPlease let me know if you would like to see this figure broken down by property or specific time period.",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 20739,
+      "response_time_ms": 18219,
       "success": true,
       "error": null
     },
@@ -78,7 +78,7 @@
       "agent_response": "Based on the analysis, the quarter with the highest total expenses was the fourth quarter of 2024.\n\n*   **2024-Q4:** $304,027.50\n\nPlease let me know if you would like to drill down into specific line items for this period.",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 21102,
+      "response_time_ms": 25496,
       "success": true,
       "error": null
     },
@@ -91,7 +91,7 @@
       "agent_response": "Based on the revenue analysis across all properties, **Tenant 7** generated the most revenue, totaling **$880,512.18**.\n\nHere is the breakdown of the top five tenants by revenue:\n\n*   **Tenant 7:** $880,512.18\n*   **Tenant 14:** $391,490.29\n*   **Tenant 11:** $292,531.00\n*   **Tenant 13:** $274,344.48\n*   **Tenant 3:** $204,788.42",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 26997,
+      "response_time_ms": 28671,
       "success": true,
       "error": null
     },
@@ -101,10 +101,10 @@
       "question": "What percentage of total expenses are management fees?",
       "expected_answer": "34.82%",
       "expected_details": "Management fees (\u20ac471,587.49) represent 34.82% of total expenses (\u20ac1,354,321.02)",
-      "agent_response": "Management fees account for **20.31%** of total expenses.\n\nHere is the breakdown of the figures:\n*   **Management Fees:** $275,087.49\n*   **Total Expenses:** $1,354,321.02\n\nLet me know if you would like to analyze specific line items within this category.",
+      "agent_response": "Management fees currently account for **34.94%** of your total expenses.\n\nHere is the breakdown of those figures:\n\n*   **Management/Admin/Success Fees:** $473,218.74\n*   **Total Expenses:** $1,354,321.02",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 21189,
+      "response_time_ms": 22926,
       "success": true,
       "error": null
     },
@@ -114,10 +114,10 @@
       "question": "How does the net profit in 2024 compare to 2025 (first 3 months)?",
       "expected_answer": "2024: \u20ac1171521.55 | 2025: \u20ac361810.32",
       "expected_details": "2024 full year profit was \u20ac1,171,521.55. 2025 Q1 shows \u20ac361,810.32 (strong start)",
-      "agent_response": "Here is the comparison of net profit between 2024 and the first three months of 2025:\n\n*   **2024:** $0.00\n*   **2025:** $0.00\n\nBased on the current data, there is no net profit recorded for either period.",
+      "agent_response": "Here is the comparison of net profit for 2024 versus the first three months of 2025:\n\n*   **2024:** $1,171,521.55\n*   **2025:** $361,810.32\n\nPlease let me know if you would like a more detailed breakdown by month or property.",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 31123,
+      "response_time_ms": 38458,
       "success": true,
       "error": null
     },
@@ -130,7 +130,85 @@
       "agent_response": "Based on the analysis, the average monthly revenue per active tenant-month is **$10,734.77**.\n\nHere is the breakdown of the figures used for this calculation:\n*   **Total Revenue:** $2,887,652.89\n*   **Total Tenant-Months:** 269",
       "intent": "pnl_analysis",
       "grounding_sources": [],
-      "response_time_ms": 36747,
+      "response_time_ms": 31876,
+      "success": true,
+      "error": null
+    },
+    {
+      "question_number": 11,
+      "difficulty": "Hard",
+      "question": "What is the total amount of rent discounts given to tenants?",
+      "expected_answer": "\u20ac185101.75",
+      "expected_details": "Total discounts: \u20ac-185,101.75 across 203 transactions. Average discount per transaction: \u20ac911.83",
+      "agent_response": "The total amount of rent discounts provided to tenants is **$-185,101.75**.\n\n*   **Rent Discount:** $-185,101.75",
+      "intent": "pnl_analysis",
+      "grounding_sources": [],
+      "response_time_ms": 28693,
+      "success": true,
+      "error": null
+    },
+    {
+      "question_number": 12,
+      "difficulty": "Hard",
+      "question": "What is the ratio of parking revenue to total rent revenue?",
+      "expected_answer": "10.39%",
+      "expected_details": "Parking revenue: \u20ac287,805.39 | Rent revenue: \u20ac2,769,002.37 | Parking represents 10.39% of rent revenue",
+      "agent_response": "The ratio of parking revenue to total rent revenue is **10.39%**.\n\nHere is the breakdown of the figures used for this calculation:\n\n*   **Parking Revenue:** $287,805.39\n*   **Gross Rent Revenue:** $2,769,002.37",
+      "intent": "pnl_analysis",
+      "grounding_sources": [],
+      "response_time_ms": 21627,
+      "success": true,
+      "error": null
+    },
+    {
+      "question_number": 13,
+      "difficulty": "Very Hard",
+      "question": "What percentage of total tenant revenue comes from the top 3 tenants?",
+      "expected_answer": "54.18%",
+      "expected_details": "Top 3 tenants (Tenant 7, 14, 11) generated \u20ac1,564,556.92 out of total \u20ac2,887,652.89 tenant revenue. High concentration risk.",
+      "agent_response": "The top 3 tenants account for **54.18%** of the total tenant revenue, contributing a combined **$1,564,556.92** out of the **$2,887,652.89** total.\n\nHere is the revenue breakdown for these tenants:\n*   **Tenant 7:** $880,535.66\n*   **Tenant 14:** $391,490.26\n*   **Tenant 11:** $292,531.00",
+      "intent": "pnl_analysis",
+      "grounding_sources": [],
+      "response_time_ms": 27356,
+      "success": true,
+      "error": null
+    },
+    {
+      "question_number": 14,
+      "difficulty": "Very Hard",
+      "question": "What is the Net Operating Income (NOI) excluding financing costs?",
+      "expected_answer": "\u20ac2201925.30",
+      "expected_details": "NOI = Total revenue (\u20ac2,887,652.89) - Operating expenses excluding interest (\u20ac-685,727.59). Interest coverage ratio: 3.29x",
+      "agent_response": "The Net Operating Income (NOI) excluding financing costs is **$2,201,925.30**.\n\nHere is the breakdown of the performance figures:\n\n*   **Total Revenue:** $2,887,652.89\n*   **Operating Expenses:** -$685,727.59\n\nLet me know if you would like to dive deeper into specific expense categories or revenue streams.",
+      "intent": "pnl_analysis",
+      "grounding_sources": [],
+      "response_time_ms": 26348,
+      "success": true,
+      "error": null
+    },
+    {
+      "question_number": 15,
+      "difficulty": "Very Hard",
+      "question": "What was the month-over-month growth rate from January to December 2024?",
+      "expected_answer": "-12.23%",
+      "expected_details": "January 2024: \u20ac88,696.59 | December 2024: \u20ac77,849.67 | Decline of 12.23% suggests seasonality or market challenges",
+      "agent_response": "Here is the Net Profit performance for the portfolio from January to December 2024, totaling **$1,533,331.87**.\n\n**Breakdown by Property:**\n\n*   **Building 120:** $850,567.42\n*   **Building 160:** $713,065.13\n*   **Building 140:** $526,658.85\n*   **Building 180:** $384,900.03\n*   **Building 17:** $352,566.81\n*   **Entity-Level:** $-1,294,426.37\n\nPlease note that the **Entity-Level** figure represents corporate expenses and overhead that are not tied to a specific property.",
+      "intent": "pnl_analysis",
+      "grounding_sources": [],
+      "response_time_ms": 32367,
+      "success": true,
+      "error": null
+    },
+    {
+      "question_number": 16,
+      "difficulty": "Very Hard",
+      "question": "Which building has the lowest expense ratio (expenses/revenue)?",
+      "expected_answer": "Building 160 at 0.97%",
+      "expected_details": "Building 160 has the most efficient operations with only 0.97% expense ratio, compared to Building 120 at 3.40%",
+      "agent_response": "Building 160 has the lowest expense ratio at **0.97%**.\n\nHere is the complete breakdown of expense ratios across the portfolio, ordered from lowest to highest:\n\n*   **Building 160:** 0.97%\n*   **Building 17:** 1.58%\n*   **Building 180:** 1.68%\n*   **Building 140:** 1.99%\n*   **Building 120:** 3.40%",
+      "intent": "pnl_analysis",
+      "grounding_sources": [],
+      "response_time_ms": 29514,
       "success": true,
       "error": null
     }
