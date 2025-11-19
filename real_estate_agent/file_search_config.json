@@ -1,19 +1,20 @@
 {
   "created_at": "2025-11-19 17:51:17",
+  "last_updated": "2025-11-19 23:44:11",
   "uploaded_files": [
-    {
-      "name": "files/jsd4iss0z8db",
-      "uri": "https://generativelanguage.googleapis.com/v1beta/files/jsd4iss0z8db",
-      "display_name": "AI Developer Agent Real Estate Task.pdf",
-      "mime_type": "application/pdf"
-    },
     {
       "name": "files/6awadtrar65x",
       "uri": "https://generativelanguage.googleapis.com/v1beta/files/6awadtrar65x",
       "display_name": "data_dictionary.md",
       "mime_type": "text/markdown"
+    },
+    {
+      "name": "files/0ythm5tq1bru",
+      "uri": "https://generativelanguage.googleapis.com/v1beta/files/0ythm5tq1bru",
+      "display_name": "pasted_text.txt",
+      "mime_type": "text/plain"
     }
   ],
-  "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/6awadtrar65x",
-  "file_name": "data_dictionary.md"
+  "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/0ythm5tq1bru",
+  "file_name": "pasted_text.txt"
 }

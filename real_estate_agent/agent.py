@@ -597,45 +597,58 @@ def query_data(state: AgentState):
 
 def query_file_search(state: AgentState):
     """
-    Uses uploaded file as context for answering questions (RAG).
+    Uses uploaded files as context for answering questions (RAG).
     This handles conceptual questions about the system, definitions, etc.
+    Now supports multiple uploaded files.
     """
-    if not FILE_URI:
+    # Load all uploaded files from config
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            uploaded_files = config.get('uploaded_files', [])
+    else:
+        uploaded_files = []
+    
+    if not uploaded_files:
         return {
-            "tool_output": "RAG file not configured. Please run setup_rag.py first.",
+            "tool_output": "No files configured for RAG. Please upload files using the sidebar.",
             "grounding_sources": []
         }
     
     messages = state['messages']
     last_message = messages[-1].content
     
-    print(f"🔍 Querying with RAG file: {last_message[:100]}...")
+    print(f"🔍 Querying with {len(uploaded_files)} RAG file(s): {last_message[:100]}...")
     
     try:
-        # Use the uploaded file as context
-        response = genai_client.models.generate_content(
-            model='gemini-3-pro-preview',
-            contents=[
-                types.Content(
-                    parts=[types.Part(text=f"""You are a helpful real estate assistant. 
-Use the knowledge from the uploaded data dictionary file to answer this question:
+        # Build content parts with all uploaded files
+        content_parts = [
+            types.Part(text=f"""You are a helpful real estate assistant. 
+Use the knowledge from the uploaded documents to answer this question:
 
 {last_message}
 
-Provide a clear, detailed answer based on the information in the file.""")]
-                ),
-                types.Content(
-                    parts=[types.Part(file_data=types.FileData(file_uri=FILE_URI))]
-                )
-            ]
+Provide a clear, detailed answer based on the information in the files.""")
+        ]
+        
+        # Add all uploaded files as context
+        for file_info in uploaded_files:
+            content_parts.append(
+                types.Part(file_data=types.FileData(file_uri=file_info['uri']))
+            )
+        
+        # Generate response with all files as context
+        response = genai_client.models.generate_content(
+            model='gemini-3-pro-preview',
+            contents=[types.Content(parts=content_parts)]
         )
         
         # Extract answer
         answer = response.text
         print(f"✅ Got response: {len(answer)} chars")
         
-        # For now, note that we used the data dictionary
-        sources = [FILE_NAME or "data_dictionary.md"]
+        # List all sources
+        sources = [f.get('display_name', 'Unknown') for f in uploaded_files]
         
         return {
             "tool_output": answer,

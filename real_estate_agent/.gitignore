@@ -121,3 +121,6 @@ logs/
 # Uncomment if file_search_config.json contains sensitive info
 # real_estate_agent/file_search_config.json
 
+# Temporary file uploads
+temp_uploads/
+
