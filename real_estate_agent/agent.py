@@ -14,7 +14,7 @@ api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
     print("WARNING: GOOGLE_API_KEY not found in environment variables.")
 
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-001", temperature=0, google_api_key=api_key)
+llm = ChatGoogleGenerativeAI(model="gemini-3-pro-preview", temperature=0, google_api_key=api_key)
 
 # --- Data Loading ---
 # Calculate absolute path to cortex.parquet (one level up from this script)
