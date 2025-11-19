@@ -39,8 +39,8 @@ else:
 
 # --- Data Loading ---
 # Support both CSV and Parquet formats
-CSV_PATH = os.path.join(current_dir, "..", "cortex.csv")
-PARQUET_PATH = os.path.join(current_dir, "..", "cortex.parquet")
+CSV_PATH = os.path.join(current_dir, "data", "cortex.csv")
+PARQUET_PATH = os.path.join(current_dir, "data", "cortex.parquet")
 
 # Try CSV first, fallback to parquet
 if os.path.exists(CSV_PATH):
