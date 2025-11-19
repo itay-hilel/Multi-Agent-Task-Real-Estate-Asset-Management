@@ -1,6 +1,6 @@
 # Real Estate Asset Management System - Data Dictionary
 
-**Generated on:** 2025-11-19 16:52:05
+**Generated on:** 2025-11-19 17:45:39
 
 **Total Records:** 3,924
 

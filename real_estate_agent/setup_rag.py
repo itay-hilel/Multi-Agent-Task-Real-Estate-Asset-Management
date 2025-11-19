@@ -1,22 +1,22 @@
 """
-One-time setup script to create and populate Google File Search store
-This store will be used for RAG queries about system documentation and data structure
+One-time setup script to upload documents for RAG (Long Context)
+This script uploads documents to Google GenAI File API to be used by the agent.
 """
 
 import os
 import time
+import json
 from google import genai
 from dotenv import load_dotenv
-import json
 
 load_dotenv()
 
-def create_file_search_store():
+def setup_rag_files():
     """
-    Creates a File Search store and uploads relevant documents.
+    Uploads relevant documents to Google GenAI File API.
     
     Returns:
-        store_name (str): The name of the created store to be saved in config
+        config (dict): The configuration to be saved.
     """
     
     # Initialize client
@@ -26,10 +26,7 @@ def create_file_search_store():
     
     client = genai.Client(api_key=api_key)
     
-    print("📦 Creating File Search corpus...")
-    # Use corpora (the actual API method name)
-    corpus = client.corpora.create(display_name="Real Estate Knowledge Base")
-    print(f"✅ Corpus created: {corpus.name}")
+    print("📦 Starting File Upload for RAG...")
     
     # List of files to upload
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -46,8 +43,8 @@ def create_file_search_store():
         }
     ]
     
-    # Upload files to corpus
-    uploaded_files = []
+    uploaded_files_info = []
+    
     for file_info in files_to_upload:
         file_path = file_info['path']
         
@@ -61,36 +58,36 @@ def create_file_search_store():
         print(f"   Description: {file_info['description']}")
         
         try:
-            # Upload file to corpus
-            with open(file_path, 'rb') as f:
-                file_data = f.read()
+            # Upload file
+            # Note: client.files.upload returns a File object with .uri attribute
+            upload_config = None
+            if file_path.endswith('.md'):
+                upload_config = {'mime_type': 'text/markdown'}
             
-            document = client.files.upload(
-                path=file_path
-            )
+            file_obj = client.files.upload(file=file_path, config=upload_config)
             
-            # Create document in corpus
-            client.corpora.documents.create(
-                corpus=corpus.name,
-                document=types.Document(
-                    display_name=os.path.basename(file_path),
-                    file=document
-                )
-            )
+            print(f"   ✅ Upload complete: {file_obj.name}")
+            print(f"   🔗 URI: {file_obj.uri}")
             
-            print(f"   ✅ Upload complete: {os.path.basename(file_path)}")
-            uploaded_files.append(os.path.basename(file_path))
+            uploaded_files_info.append({
+                'name': file_obj.name,
+                'uri': file_obj.uri,
+                'display_name': os.path.basename(file_path),
+                'mime_type': file_obj.mime_type
+            })
             
         except Exception as e:
             print(f"   ❌ Upload failed: {e}")
             import traceback
             traceback.print_exc()
     
-    # Save corpus configuration
+    # Save configuration
     config = {
-        'corpus_name': corpus.name,
         'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'uploaded_files': uploaded_files
+        'uploaded_files': uploaded_files_info,
+        # For backward compatibility with single-file agent (will use the last one if multiple)
+        'file_uri': uploaded_files_info[-1]['uri'] if uploaded_files_info else None,
+        'file_name': uploaded_files_info[-1]['display_name'] if uploaded_files_info else None
     }
     
     config_path = os.path.join(current_dir, 'file_search_config.json')
@@ -99,38 +96,18 @@ def create_file_search_store():
     
     print(f"\n✅ Configuration saved to: {config_path}")
     print(f"\n📊 Summary:")
-    print(f"   Corpus Name: {corpus.name}")
-    print(f"   Files Uploaded: {len(uploaded_files)}")
-    print(f"   Files: {', '.join(uploaded_files)}")
+    print(f"   Files Uploaded: {len(uploaded_files_info)}")
+    for f in uploaded_files_info:
+        print(f"   - {f['display_name']} ({f['uri']})")
     
     print("\n🎯 Next Steps:")
-    print("   1. The agent.py will automatically use this corpus")
-    print("   2. Test with queries like:")
-    print("      - 'What does ledger_category mean?'")
-    print("      - 'Explain entity-level expenses'")
-    print("      - 'What properties do we manage?'")
+    print("   1. The agent.py will automatically use these files")
     
-    return corpus.name
-
-def list_existing_corpora():
-    """List all existing corpora (for debugging)"""
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY not found")
-    
-    client = genai.Client(api_key=api_key)
-    
-    print("\n📚 Existing Corpora:")
-    try:
-        corpora = client.corpora.list()
-        for idx, corpus in enumerate(corpora, 1):
-            print(f"   {idx}. {corpus.name} - {corpus.display_name}")
-    except Exception as e:
-        print(f"   Error listing corpora: {e}")
+    return config
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  GOOGLE FILE SEARCH STORE SETUP")
+    print("  GOOGLE GENAI FILE SETUP")
     print("=" * 60)
     
     # First, check if data dictionary exists
@@ -143,8 +120,8 @@ if __name__ == "__main__":
         print("   $ python3 real_estate_agent/generate_data_dictionary.py")
         exit(1)
     
-    # Create and populate corpus
-    corpus_name = create_file_search_store()
+    # Run setup
+    setup_rag_files()
     
     print("\n" + "=" * 60)
     print("  SETUP COMPLETE!")
