@@ -2,6 +2,12 @@
 
 An intelligent agent that answers complex questions about real estate portfolios using Google's GenAI and RAG (Retrieval Augmented Generation).
 
+
+
+https://github.com/user-attachments/assets/385086e8-2e46-415c-9643-d8b2436d27fa
+
+
+
 ## 🎯 North Star Metric: **90% Accuracy** 
 With more time and real user question understanding, we would get to 99% accuracy
 
