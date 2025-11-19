@@ -57,18 +57,27 @@ mermaid_code = app.get_graph().draw_mermaid()
 print(mermaid_code)
 print("\n")
 
-# Save it to a file
-with open("graph_diagram.mmd", "w") as f:
+# Get the docs directory path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+docs_dir = os.path.join(os.path.dirname(current_dir), 'docs')
+os.makedirs(docs_dir, exist_ok=True)
+
+# Save paths
+mermaid_path = os.path.join(docs_dir, 'graph_diagram.mmd')
+png_path = os.path.join(docs_dir, 'graph_diagram.png')
+
+# Save Mermaid diagram
+with open(mermaid_path, "w") as f:
     f.write(mermaid_code)
-print("✅ Saved Mermaid diagram to graph_diagram.mmd")
+print(f"✅ Saved Mermaid diagram to {mermaid_path}")
 print("   → You can view this at: https://mermaid.live/")
 
 # Try to generate PNG  
 try:
     png_data = app.get_graph().draw_mermaid_png()
-    with open("graph_diagram.png", "wb") as f:
+    with open(png_path, "wb") as f:
         f.write(png_data)
-    print("✅ Saved PNG diagram to graph_diagram.png")
+    print(f"✅ Saved PNG diagram to {png_path}")
 except Exception as e:
     print(f"⚠️  Could not generate PNG: {e}")
     print("   → Install with: pip install pygraphviz (requires graphviz system library)")
