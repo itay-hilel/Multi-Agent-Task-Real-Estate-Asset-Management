@@ -34,11 +34,11 @@ def setup_rag_files():
     
     files_to_upload = [
         {
-            'path': os.path.join(parent_dir, "AI Developer Agent Real Estate Task.pdf"),
+            'path': os.path.join(parent_dir, "..", "AI Developer Agent Real Estate Task.pdf"),
             'description': 'Task specification document'
         },
         {
-            'path': os.path.join(current_dir, "data_dictionary.md"),
+            'path': os.path.join(parent_dir, "docs", "data_dictionary.md"),
             'description': 'Generated data dictionary from cortex.parquet'
         }
     ]
@@ -90,7 +90,7 @@ def setup_rag_files():
         'file_name': uploaded_files_info[-1]['display_name'] if uploaded_files_info else None
     }
     
-    config_path = os.path.join(current_dir, 'file_search_config.json')
+    config_path = os.path.join(parent_dir, 'file_search_config.json')
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
     
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     
     # First, check if data dictionary exists
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    dict_path = os.path.join(current_dir, "data_dictionary.md")
+    dict_path = os.path.join(current_dir, "..", "docs", "data_dictionary.md")
     
     if not os.path.exists(dict_path):
         print("\n⚠️  data_dictionary.md not found!")

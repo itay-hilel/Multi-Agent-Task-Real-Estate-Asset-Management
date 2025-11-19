@@ -9,6 +9,8 @@ import time
 import pandas as pd
 from datetime import datetime
 from langchain_core.messages import HumanMessage
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent import app as agent_app
 from dotenv import load_dotenv
 
@@ -151,7 +153,7 @@ if __name__ == "__main__":
     
     # Run evaluations
     results = run_all_evals(
-        csv_path=os.path.join(current_dir, 'evals.csv'),
+        csv_path=os.path.join(current_dir, '..', 'data', 'evals.csv'),
         output_path=os.path.join(current_dir, 'eval_results.json')
     )
     

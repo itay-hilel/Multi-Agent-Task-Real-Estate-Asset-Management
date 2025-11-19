@@ -15,7 +15,7 @@ def generate_data_dictionary():
     
     # Load data
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_path = os.path.join(current_dir, "..", "cortex.parquet")
+    data_path = os.path.join(current_dir, "..", "data", "cortex.parquet")
     df = pd.read_parquet(data_path)
     
     # Fill missing property names for analysis
@@ -193,7 +193,7 @@ This dataset contains financial records (profit/loss statements) for a real esta
 """
     
     # Save as markdown
-    output_path = os.path.join(current_dir, "data_dictionary.md")
+    output_path = os.path.join(current_dir, "..", "docs", "data_dictionary.md")
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(content)
     

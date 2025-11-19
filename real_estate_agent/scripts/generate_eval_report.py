@@ -149,8 +149,8 @@ if __name__ == "__main__":
     # Generate report
     report = generate_report(
         grades_path=os.path.join(current_dir, 'eval_grades.json'),
-        output_path=os.path.join(current_dir, 'eval_report.md')
+        output_path=os.path.join(current_dir, '..', 'docs', 'eval_report.md')
     )
     
     print(f"\n✅ Evaluation complete! Review the report at:")
-    print(f"   {os.path.join(current_dir, 'eval_report.md')}")
+    print(f"   {os.path.join(current_dir, '..', 'docs', 'eval_report.md')}")

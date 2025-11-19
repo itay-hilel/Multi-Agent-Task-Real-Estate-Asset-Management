@@ -81,7 +81,7 @@ GOOGLE_API_KEY=your_google_api_key_here
 This converts your parquet data into a searchable document:
 
 ```bash
-python3 real_estate_agent/generate_data_dictionary.py
+python3 real_estate_agent/scripts/generate_data_dictionary.py
 ```
 
 **What this does:**
@@ -96,7 +96,7 @@ python3 real_estate_agent/generate_data_dictionary.py
 
 **Output:**
 ```
-✅ Data dictionary generated: real_estate_agent/data_dictionary.md
+✅ Data dictionary generated: real_estate_agent/docs/data_dictionary.md
    Total size: ~15,000 characters
 ```
 
@@ -105,7 +105,7 @@ python3 real_estate_agent/generate_data_dictionary.py
 This is a **one-time operation** that creates the RAG knowledge base:
 
 ```bash
-python3 real_estate_agent/setup_rag.py
+python3 real_estate_agent/scripts/setup_rag.py
 ```
 
 **What this does:**
@@ -169,11 +169,18 @@ streamlit run real_estate_agent/app.py
 real_estate_agent/
 ├── agent.py                     # Main agent with File Search RAG
 ├── app.py                       # Streamlit UI
-├── generate_data_dictionary.py  # Data → Document converter
-├── setup_rag.py                 # One-time RAG setup
-├── file_search_config.json      # Auto-generated store config
-├── data_dictionary.md           # Auto-generated documentation
-└── requirements.txt             # Dependencies
+├── requirements.txt             # Dependencies
+├── data/                        # Data files
+│   ├── cortex.parquet           # Financial data
+│   └── evals.csv                # Evaluation dataset
+├── docs/                        # Documentation
+│   ├── data_dictionary.md       # Auto-generated RAG doc
+│   └── eval_report.md           # Performance report
+└── scripts/                     # Helper scripts
+    ├── setup_rag.py             # One-time RAG setup
+    ├── generate_data_dictionary.py
+    ├── run_evals.py
+    └── ...
 ```
 
 ### Intent Classification
@@ -259,10 +266,10 @@ generate_response → Answer + grounding sources
 ## Troubleshooting
 
 ### "File Search store not configured"
-**Solution:** Run `python3 real_estate_agent/setup_rag.py`
+**Solution:** Run `python3 real_estate_agent/scripts/setup_rag.py`
 
 ### "data_dictionary.md not found"
-**Solution:** Run `python3 real_estate_agent/generate_data_dictionary.py` first
+**Solution:** Run `python3 real_estate_agent/scripts/generate_data_dictionary.py` first
 
 ### "GOOGLE_API_KEY not found"
 **Solution:** Add API key to `.env` file in project root
